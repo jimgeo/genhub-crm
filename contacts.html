@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contacts — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="page-header">
+        <h1 class="page-title">Contacts</h1>
+        <a href="contact-detail.html?new=1" class="btn btn-primary">New Contact</a>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" class="search-input" id="search" placeholder="Search contacts...">
+        <span id="record-count" style="font-family:var(--font-ui);font-size:12px;color:var(--color-gray-400);"></span>
+      </div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Job Title</th>
+              <th>Account</th>
+            </tr>
+          </thead>
+          <tbody id="contacts-tbody">
+            <tr><td colspan="5" class="loading">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/contacts.js"></script>
+  <script>
+    (async () => {
+      await initApp();
+      await loadContactsList();
+    })();
+  </script>
+</body>
+</html>

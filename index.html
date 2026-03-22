@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="page-header">
+        <h1 class="page-title">Dashboard</h1>
+      </div>
+
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Accounts</div>
+          <div class="stat-value" id="stat-accounts">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Contacts</div>
+          <div class="stat-value" id="stat-contacts">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Welcome to GenHub CRM</h3>
+        </div>
+        <p>Manage your coworking space accounts and contacts. Use the sidebar to navigate.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    (async () => {
+      await initApp();
+      try {
+        const data = await SheetsAPI.batchGet([CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.CONTACTS]);
+        document.getElementById('stat-accounts').textContent = data.Accounts.length;
+        document.getElementById('stat-contacts').textContent = data.Contacts.length;
+      } catch (e) {
+        console.warn('[dashboard] Could not load stats:', e);
+      }
+    })();
+  </script>
+</body>
+</html>

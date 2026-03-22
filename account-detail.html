@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="accounts.html">Accounts</a> / <span id="breadcrumb-name">New Account</span></div>
+      <div class="page-header">
+        <h1 class="page-title" id="page-title">New Account</h1>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Details</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Account Name</label>
+            <input type="text" class="form-input" id="f-name" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Type</label>
+            <select class="form-select" id="f-type">
+              <option value="">— Select —</option>
+              <option value="Tenant">Tenant</option>
+              <option value="Virtual">Virtual</option>
+              <option value="Meeting Room">Meeting Room</option>
+              <option value="Partner">Partner</option>
+              <option value="Vendor">Vendor</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="tel" class="form-input" id="f-phone">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" class="form-input" id="f-email">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Website</label>
+            <input type="url" class="form-input" id="f-website">
+          </div>
+        </div>
+
+        <div class="section-title">Address</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Address Line 1</label>
+            <input type="text" class="form-input" id="f-address_line1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Address Line 2</label>
+            <input type="text" class="form-input" id="f-address_line2">
+          </div>
+          <div class="form-group">
+            <label class="form-label">City</label>
+            <input type="text" class="form-input" id="f-city">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Postcode</label>
+            <input type="text" class="form-input" id="f-postcode">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-primary" id="btn-save" onclick="saveAccount()">Save</button>
+          <a href="accounts.html" class="btn">Cancel</a>
+          <button class="btn btn-danger" id="btn-delete" style="display:none;margin-left:auto;" onclick="deleteAccount()">Delete</button>
+        </div>
+      </div>
+
+      <!-- Linked Contacts -->
+      <div class="linked-section" id="contacts-section" style="display:none;">
+        <div class="linked-header">
+          <h3 class="card-title">Contacts</h3>
+          <a id="add-contact-link" href="#" class="btn btn-sm">Add Contact</a>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Job Title</th>
+              </tr>
+            </thead>
+            <tbody id="contacts-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/accounts.js"></script>
+  <script>
+    (async () => {
+      await initApp();
+      await loadAccountDetail();
+    })();
+  </script>
+</body>
+</html>
