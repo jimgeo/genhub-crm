@@ -10,6 +10,7 @@ const AREA_COLUMNS = [
   { key: 'zone', label: 'Zone' },
   { key: 'area', label: 'Area' },
   { key: 'single_multi', label: 'Type' },
+  { key: 'category', label: 'Category' },
   { key: 'description', label: 'Description' },
   { key: 'current', label: 'Current' }
 ];
@@ -31,6 +32,7 @@ function applyAreaFilters() {
       return (a.zone || '').toLowerCase().includes(q) ||
         (a.area || '').toLowerCase().includes(q) ||
         (a.single_multi || '').toLowerCase().includes(q) ||
+        (a.category || '').toLowerCase().includes(q) ||
         (a.description || '').toLowerCase().includes(q);
     }
     return true;
@@ -74,7 +76,7 @@ function renderAreasTable(areas) {
     tbody.textContent = '';
     var tr = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = 'table-empty';
     td.textContent = 'No areas found';
     tr.appendChild(td);
@@ -82,8 +84,32 @@ function renderAreasTable(areas) {
     return;
   }
 
+  // Sort by category (blanks first, then alphabetical), then zone, then area
+  var sorted = areas.slice().sort(function(a, b) {
+    var ca = (a.category || '').toLowerCase();
+    var cb = (b.category || '').toLowerCase();
+    if (!ca && cb) return -1;
+    if (ca && !cb) return 1;
+    if (ca !== cb) return ca.localeCompare(cb);
+    return (a.zone || '').localeCompare(b.zone || '')
+      || (a.area || '').localeCompare(b.area || '');
+  });
+
   tbody.textContent = '';
-  areas.forEach(function(a) {
+  var currentCategory = null;
+  sorted.forEach(function(a) {
+    var cat = a.category || '';
+    if (cat !== currentCategory) {
+      currentCategory = cat;
+      var gtr = document.createElement('tr');
+      gtr.className = 'category-group-row';
+      var gtd = document.createElement('td');
+      gtd.colSpan = 6;
+      gtd.textContent = cat || 'Standard';
+      gtr.appendChild(gtd);
+      tbody.appendChild(gtr);
+    }
+
     var tr = document.createElement('tr');
     var cur = isAreaCurrent(a);
     if (!cur) {
@@ -92,7 +118,7 @@ function renderAreasTable(areas) {
     }
     tr.onclick = function() { window.location.href = 'area-detail.html?id=' + encodeURIComponent(a.area_id); };
 
-    var fields = [a.zone, a.area, a.single_multi, a.description, cur ? 'Yes' : 'No'];
+    var fields = [a.zone, a.area, a.single_multi, a.category, a.description, cur ? 'Yes' : 'No'];
     fields.forEach(function(val) {
       var td = document.createElement('td');
       td.textContent = val || '';
@@ -108,7 +134,7 @@ function renderAreasTable(areas) {
 var _editingArea = null;
 var _editingAreaIndex = -1;
 
-var AREA_FORM_FIELDS = ['zone', 'area', 'single_multi', 'description', 'current'];
+var AREA_FORM_FIELDS = ['zone', 'area', 'single_multi', 'category', 'description', 'current'];
 
 async function loadAreaDetail() {
   var id = getParam('id');
@@ -167,7 +193,7 @@ async function loadLinkedAccountAreas(areaId) {
   if (links.length === 0) {
     var tr = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = 'table-empty';
     td.textContent = 'No accounts linked to this area';
     tr.appendChild(td);
