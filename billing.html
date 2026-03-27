@@ -39,6 +39,7 @@
     .billing-table tr.type-old td { color: var(--color-gray-400); }
     .billing-table tr.type-old td.has-value { background: #fafafa; }
     .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
+    .billing-table td.cat-additional { background: #e8f4fd; }
 
     .billing-table tr:hover td.sticky-col { z-index: 3; background: var(--color-gray-50); }
   </style>
@@ -95,6 +96,13 @@
       var acctNames = {};
       accounts.forEach(function(a) { acctNames[a.account_id] = a.name; });
 
+      // Build area category lookup: "zone|area" -> category
+      var areaCategoryMap = {};
+      areas.forEach(function(a) {
+        var key = (a.zone || '').toLowerCase() + '|' + (a.area || '').toLowerCase();
+        areaCategoryMap[key] = (a.category || '').toLowerCase().trim();
+      });
+
       var colSet = {};
       var rowMap = {};
 
@@ -112,8 +120,9 @@
         colSet[colKey] = { month: month, year: year };
 
         var rowKey = acctName.toLowerCase() + '|' + zone.toLowerCase() + '|' + area.toLowerCase();
+        var areaKey = zone.toLowerCase() + '|' + area.toLowerCase();
         if (!rowMap[rowKey]) {
-          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, amounts: {} };
+          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, category: areaCategoryMap[areaKey] || '', amounts: {} };
         }
         // If any billing record for this row is 'old' or 'add old', mark the whole row old
         if (type === 'old' || type === 'add old') rowMap[rowKey].type = 'old';
@@ -142,7 +151,7 @@
         if (!activeAreaKeys[key]) {
           var rowKey = '(vacant)|' + key;
           if (!rowMap[rowKey]) {
-            rowMap[rowKey] = { account_name: '(vacant)', zone: a.zone || '', area: a.area || '', type: 'vacant', amounts: {} };
+            rowMap[rowKey] = { account_name: '(vacant)', zone: a.zone || '', area: a.area || '', type: 'vacant', category: (a.category || '').toLowerCase().trim(), amounts: {} };
           }
         }
       });
@@ -293,11 +302,13 @@
 
         var tdArea = document.createElement('td');
         tdArea.className = 'sticky-col col-area';
+        if (row.category === 'additional') tdArea.classList.add('cat-additional');
         tdArea.textContent = row.area;
         tr.appendChild(tdArea);
 
         var tdType = document.createElement('td');
         tdType.className = 'sticky-col col-type';
+        if (row.category === 'additional') tdType.classList.add('cat-additional');
         tdType.textContent = row.type;
         tr.appendChild(tdType);
 
