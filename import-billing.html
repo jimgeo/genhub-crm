@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import Billing — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <style>
+    .import-steps { max-width: 960px; }
+    .file-upload-area {
+      border: 2px dashed var(--color-gray-300); border-radius: var(--radius-lg);
+      background: var(--color-surface); padding: 48px 24px; text-align: center;
+      cursor: pointer; transition: all var(--transition);
+    }
+    .file-upload-area:hover, .file-upload-area.drag-over { border-color: var(--color-black); background: var(--color-gray-100); }
+    .file-upload-area.has-file { border-color: var(--color-success); background: #f0faf4; }
+    .file-upload-area .file-icon { font-size: 36px; margin-bottom: 8px; }
+    .file-upload-area p { font-family: var(--font-ui); font-size: 13px; color: var(--color-gray-500); }
+    .file-upload-area input[type="file"] { display: none; }
+
+    .preflight { margin-top: 20px; }
+    .preflight-section { margin-bottom: 16px; }
+    .preflight-title {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-gray-400);
+      margin-bottom: 8px;
+    }
+    .preflight-ok { color: var(--color-success); }
+    .preflight-warn { color: var(--color-warning); }
+    .preflight-err { color: var(--color-danger); }
+    .preflight-list {
+      background: var(--color-surface); border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius); max-height: 200px; overflow-y: auto;
+      padding: 8px 12px; font-size: 12px; font-family: 'SF Mono', monospace;
+    }
+    .preflight-list div { padding: 2px 0; }
+
+    .import-stats { display: flex; gap: 16px; flex-wrap: wrap; margin: 16px 0; }
+    .import-stat {
+      background: var(--color-surface); border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius); padding: 12px 20px; text-align: center;
+    }
+    .import-stat .val { font-family: var(--font-heading); font-size: 28px; color: var(--color-black); }
+    .import-stat .lbl {
+      font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+      letter-spacing: 1px; text-transform: uppercase; color: var(--color-gray-400);
+    }
+
+    .progress-bar-track { width:100%; height:24px; background:var(--color-gray-100); border-radius:12px; overflow:hidden; margin:12px 0; }
+    .progress-bar-fill { height:100%; width:0%; background:linear-gradient(90deg,var(--color-info),var(--color-success)); border-radius:12px; transition:width 0.3s ease; }
+    .progress-text { font-family:var(--font-ui); font-size:13px; color:var(--color-gray-600); margin-bottom:8px; }
+    .progress-log {
+      background:#1a1a2e; color:#a0e8af; font-family:'SF Mono','Fira Code',monospace;
+      font-size:12px; line-height:1.6; padding:16px; border-radius:var(--radius);
+      max-height:220px; overflow-y:auto; margin-top:12px;
+    }
+    .log-error { color:#ff6b6b; }
+    .log-info { color:#87ceeb; }
+    .log-success { color:#a0e8af; }
+
+    .summary-cards { display:flex; gap:16px; flex-wrap:wrap; margin-top:16px; }
+    .summary-card {
+      background:var(--color-surface); border:1px solid var(--color-gray-200);
+      border-radius:var(--radius-lg); padding:20px 28px; text-align:center; min-width:140px;
+    }
+    .summary-card .val { font-family:var(--font-heading); font-size:32px; color:var(--color-black); }
+    .summary-card .lbl { font-family:var(--font-ui); font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:var(--color-gray-400); margin-top:4px; }
+    .summary-card.err { border-color:var(--color-danger); }
+    .summary-card.err .val { color:var(--color-danger); }
+    .summary-card.warn { border-color:var(--color-warning); }
+    .summary-card.warn .val { color:var(--color-warning); }
+
+    .mapping-table { width:100%; border-collapse:collapse; font-size:12px; margin-top:16px; }
+    .mapping-table th {
+      font-family:var(--font-ui); font-size:10px; font-weight:600; letter-spacing:1px;
+      text-transform:uppercase; color:var(--color-gray-500); background:var(--color-gray-100);
+      padding:8px 12px; text-align:left; border-bottom:1px solid var(--color-gray-200);
+    }
+    .mapping-table td { padding:6px 12px; border-bottom:1px solid var(--color-gray-100); }
+    .tag { display:inline-block; padding:2px 8px; border-radius:3px; font-family:var(--font-ui); font-size:10px; font-weight:600; letter-spacing:0.5px; text-transform:uppercase; }
+    .tag-billing { background:#ede9fe; color:#6d28d9; }
+    .tag-ignore { background:var(--color-gray-100); color:var(--color-gray-400); }
+
+    .step { display: none; }
+    .step.active { display: block; }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="index.html">Dashboard</a> / Import Billing</div>
+      <div class="page-header">
+        <h1 class="page-title">Import Billing Forecast</h1>
+      </div>
+
+      <div class="import-steps">
+
+        <!-- Step 1: Upload + Preflight -->
+        <div class="step active" id="step-upload">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Upload Excel File</h3>
+            </div>
+            <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+              Upload the Monthly Expected Forecast .xlsx file. Each row (account + area + zone) is unpivoted into one Billing record per month with a non-zero amount.
+            </p>
+            <div class="file-upload-area" id="dropArea">
+              <div class="file-icon">&#128200;</div>
+              <p id="dropLabel"><strong>Click to select</strong> or drag &amp; drop your .xlsx file</p>
+              <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+            </div>
+
+            <div style="margin-top:24px;">
+              <h4 class="card-title" style="margin-bottom:12px;">Expected Format</h4>
+              <table class="mapping-table">
+                <thead><tr><th>Column</th><th>Maps To</th><th>Notes</th></tr></thead>
+                <tbody>
+                  <tr><td>A — Account</td><td><span class="tag tag-billing">Billing</span> account_id</td><td>Matched to Accounts by name before brackets</td></tr>
+                  <tr><td>B — Type</td><td><span class="tag tag-billing">Billing</span> type</td><td><code>old</code> = cancelled, <code>add</code> = manual, <code>Upcoming</code>, <code>Notice given</code>, blank = active</td></tr>
+                  <tr><td>C — Legacy desk names</td><td><span class="tag tag-ignore">Ignore</span></td><td></td></tr>
+                  <tr><td>D — Zone</td><td><span class="tag tag-billing">Billing</span> area_id</td><td rowspan="2">Zone + Area matched to Area sheet</td></tr>
+                  <tr><td>E — Area</td><td><span class="tag tag-billing">Billing</span> area_id</td></tr>
+                  <tr><td>F — Notes</td><td><span class="tag tag-billing">Billing</span> notes</td><td></td></tr>
+                  <tr><td>G onwards — Monthly £</td><td><span class="tag tag-billing">Billing</span> amount</td><td>Row 1 = month (JAN-DEC), Row 2 = year. One billing row per non-zero value.</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:24px;">
+              <h4 class="card-title" style="margin-bottom:12px;">Import Logic</h4>
+              <table class="mapping-table">
+                <thead><tr><th>Rule</th><th>Logic</th></tr></thead>
+                <tbody>
+                  <tr><td>Account matching</td><td>Account name matched on text <strong>before the first bracket</strong>. E.g. "Geo.me Solutions (Jim Strong)" matches Account "Geo.me Solutions". Case-insensitive.</td></tr>
+                  <tr><td>Area matching</td><td>Zone + Area matched against Area sheet records. Both must match (case-insensitive).</td></tr>
+                  <tr><td>Title rows</td><td>Rows where Type = "Title" are section headers — skipped entirely.</td></tr>
+                  <tr><td>Zero/blank amounts</td><td>Only non-zero amounts create billing records. Blank and zero cells are skipped.</td></tr>
+                  <tr><td>Duplicates</td><td>If a billing record already exists for the same account + area + month + year, it is skipped (not overwritten).</td></tr>
+                  <tr><td>No deletes</td><td>Billing records are never deleted. Type field tracks lifecycle (old, add, Upcoming, Notice given).</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Preflight + Preview -->
+        <div class="step" id="step-preflight">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Pre-flight Check</h3>
+            </div>
+            <div id="preflight-results"></div>
+            <div class="import-stats" id="import-stats"></div>
+            <div style="margin-top:20px;display:flex;gap:12px;">
+              <button class="btn btn-primary" id="btn-import" onclick="runImport()">Import Billing</button>
+              <button class="btn" onclick="resetImport()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Progress -->
+        <div class="step" id="step-progress">
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">Importing...</h3></div>
+            <div class="progress-text" id="progress-text">Preparing...</div>
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
+            <div class="progress-log" id="progress-log"></div>
+          </div>
+        </div>
+
+        <!-- Step 4: Summary -->
+        <div class="step" id="step-summary">
+          <div class="card">
+            <div class="card-header"><h3 class="card-title">Import Complete</h3></div>
+            <div class="summary-cards" id="summary-cards"></div>
+            <div style="margin-top:24px;display:flex;gap:12px;">
+              <button class="btn" onclick="resetImport()">Import Another</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    // ─── State ───
+    var parsedBillingRows = []; // { account, accountClean, type, zone, area, notes, month, year, amount }
+    var accountIdMap = {};      // lowercase name -> account_id
+    var areaIdMap = {};         // "zone||area" lowercase -> area_id
+    var unmatchedAccounts = new Set();
+    var unmatchedAreas = new Set();
+    var existingKeys = new Set(); // "accountId|areaId|month|year" for dupe detection
+    var BATCH_SIZE = 100;
+    var MAX_RETRIES = 3;
+    var BATCH_DELAY_MS = 500;
+    var ADD_TYPES = ['add', 'add old'];
+
+    // ─── Account name: strip brackets ───
+    function cleanAccountName(name) {
+      if (!name) return '';
+      return name.replace(/\s*\(.*$/, '').trim();
+    }
+
+    // ─── Parse Excel ───
+    function parseExcel(data) {
+      var wb = XLSX.read(data, { type: 'array' });
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var range = XLSX.utils.decode_range(ws['!ref']);
+
+      // Row 0 = month names, Row 1 = years (0-indexed)
+      var monthCols = [];
+      for (var c = 6; c <= range.e.c; c++) { // col G = index 6
+        var mCell = ws[XLSX.utils.encode_cell({ r: 0, c: c })];
+        var yCell = ws[XLSX.utils.encode_cell({ r: 1, c: c })];
+        var month = mCell ? String(mCell.v).trim().toUpperCase() : '';
+        var year = yCell ? String(Math.floor(Number(yCell.v))) : '';
+        if (month && year) {
+          monthCols.push({ c: c, month: month, year: year });
+        }
+      }
+
+      parsedBillingRows = [];
+      for (var r = 2; r <= range.e.r; r++) { // data starts row 3 = index 2
+        var acctCell = ws[XLSX.utils.encode_cell({ r: r, c: 0 })];
+        var typeCell = ws[XLSX.utils.encode_cell({ r: r, c: 1 })];
+        var zoneCell = ws[XLSX.utils.encode_cell({ r: r, c: 3 })];
+        var areaCell = ws[XLSX.utils.encode_cell({ r: r, c: 4 })];
+        var notesCell = ws[XLSX.utils.encode_cell({ r: r, c: 5 })];
+
+        var account = acctCell ? String(acctCell.v).trim() : '';
+        var type = typeCell ? String(typeCell.v).trim() : '';
+        if (!account || type.toLowerCase() === 'title') continue;
+
+        var accountClean = cleanAccountName(account);
+        var zone = zoneCell ? String(zoneCell.v).trim() : '';
+        var area = areaCell ? String(areaCell.v).trim() : '';
+        var notes = notesCell ? String(notesCell.v).trim() : '';
+
+        for (var mi = 0; mi < monthCols.length; mi++) {
+          var mc = monthCols[mi];
+          var cell = ws[XLSX.utils.encode_cell({ r: r, c: mc.c })];
+          if (!cell) continue;
+          var rawVal = cell.v;
+          if (typeof rawVal !== 'number') continue;
+          if (rawVal === 0) continue;
+          var amount = Math.round(rawVal * 100) / 100;
+
+          parsedBillingRows.push({
+            account: account,
+            accountClean: accountClean,
+            type: type,
+            zone: zone,
+            area: area,
+            notes: notes,
+            month: mc.month,
+            year: mc.year,
+            amount: Math.round(amount * 100) / 100
+          });
+        }
+      }
+    }
+
+    // ─── Pre-flight: load CRM data and match ───
+    async function runPreflight() {
+      var data = await SheetsAPI.batchGet([
+        CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS, CONFIG.SHEETS.BILLING
+      ]);
+
+      console.log('[preflight] batchGet keys:', Object.keys(data));
+      console.log('[preflight] Area rows:', (data.Area || []).length);
+      var accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      var areas = (data.Area || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      var existingBilling = data.Billing || [];
+      console.log('[preflight] Areas after filter:', areas.length);
+      if (areas.length > 0) console.log('[preflight] Sample area:', JSON.stringify(areas[0]));
+
+      // Build account lookup (lowercase name -> account_id)
+      accountIdMap = {};
+      accounts.forEach(function(a) {
+        accountIdMap[a.name.toLowerCase().trim()] = a.account_id;
+      });
+
+      // Build area lookup ("zone||area" lowercase -> area_id)
+      areaIdMap = {};
+      var areasWithoutId = 0;
+      areas.forEach(function(a) {
+        var key = (a.zone || '').toLowerCase().trim() + '||' + (a.area || '').toLowerCase().trim();
+        if (a.area_id) {
+          areaIdMap[key] = a.area_id;
+        } else {
+          areasWithoutId++;
+        }
+      });
+      if (areasWithoutId > 0) {
+        console.warn('[preflight] ' + areasWithoutId + ' areas have no area_id — run Backfill Area IDs in Settings first');
+      }
+      console.log('[preflight] areaIdMap entries:', Object.keys(areaIdMap).length);
+
+      // Build existing billing keys for dupe detection
+      existingKeys = new Set();
+      existingBilling.forEach(function(b) {
+        var key = (b.account_id || '') + '|' + (b.area_id || '') + '|' + (b.month || '').toUpperCase() + '|' + (b.year || '');
+        existingKeys.add(key);
+      });
+
+      // Match and flag issues
+      unmatchedAccounts = new Set();
+      unmatchedAreas = new Set();
+      var matchedAccounts = new Set();
+      var matchedAreas = new Set();
+      var dupeCount = 0;
+      var newRows = [];
+
+      parsedBillingRows.forEach(function(row) {
+        var acctKey = row.accountClean.toLowerCase().trim();
+        var areaKey = row.zone.toLowerCase().trim() + '||' + row.area.toLowerCase().trim();
+        var isAddType = ADD_TYPES.indexOf(row.type.toLowerCase().trim()) !== -1;
+        var acctId = isAddType ? '' : (accountIdMap[acctKey] || '');
+        var areaId = areaIdMap[areaKey] || '';
+
+        if (!isAddType) {
+          if (acctId) matchedAccounts.add(acctKey);
+          else unmatchedAccounts.add(row.accountClean);
+        }
+
+        if (areaId) matchedAreas.add(areaKey);
+        else if (row.zone || row.area) unmatchedAreas.add(row.zone + ' / ' + row.area);
+
+        // Check dupe
+        var billingKey = acctId + '|' + areaId + '|' + row.month + '|' + row.year;
+        if (existingKeys.has(billingKey)) {
+          dupeCount++;
+        } else {
+          newRows.push(row);
+        }
+      });
+
+      showPreflight(matchedAccounts.size, unmatchedAccounts, matchedAreas.size, unmatchedAreas, newRows.length, dupeCount);
+    }
+
+    // ─── Show preflight results ───
+    function showPreflight(matchedAccts, unmatchedAccts, matchedAreas, unmatchedAreaSet, newCount, dupeCount) {
+      showStep('step-preflight');
+      var container = document.getElementById('preflight-results');
+      container.textContent = '';
+
+      // Accounts section
+      addPreflightSection(container, 'Accounts',
+        matchedAccts + ' matched',
+        unmatchedAccts.size > 0 ? unmatchedAccts.size + ' unmatched (rows will import without account_id)' : 'All matched',
+        unmatchedAccts.size > 0 ? 'warn' : 'ok',
+        unmatchedAccts.size > 0 ? Array.from(unmatchedAccts).sort() : null
+      );
+
+      // Areas section
+      addPreflightSection(container, 'Areas',
+        matchedAreas + ' matched',
+        unmatchedAreaSet.size > 0 ? unmatchedAreaSet.size + ' unmatched (rows will import without area_id)' : 'All matched',
+        unmatchedAreaSet.size > 0 ? 'warn' : 'ok',
+        unmatchedAreaSet.size > 0 ? Array.from(unmatchedAreaSet).sort() : null
+      );
+
+      // Stats
+      var statsEl = document.getElementById('import-stats');
+      statsEl.textContent = '';
+      var stats = [
+        { val: parsedBillingRows.length, lbl: 'Total Records' },
+        { val: newCount, lbl: 'New (to import)' },
+        { val: dupeCount, lbl: 'Duplicates (skip)' }
+      ];
+      stats.forEach(function(s) {
+        var div = document.createElement('div');
+        div.className = 'import-stat';
+        var valDiv = document.createElement('div');
+        valDiv.className = 'val';
+        valDiv.textContent = s.val;
+        var lblDiv = document.createElement('div');
+        lblDiv.className = 'lbl';
+        lblDiv.textContent = s.lbl;
+        div.appendChild(valDiv);
+        div.appendChild(lblDiv);
+        statsEl.appendChild(div);
+      });
+
+      // Disable import if nothing to import
+      document.getElementById('btn-import').disabled = (newCount === 0);
+    }
+
+    function addPreflightSection(container, title, okMsg, issueMsg, status, items) {
+      var section = document.createElement('div');
+      section.className = 'preflight-section';
+
+      var titleEl = document.createElement('div');
+      titleEl.className = 'preflight-title';
+      titleEl.textContent = title;
+      section.appendChild(titleEl);
+
+      var okLine = document.createElement('div');
+      okLine.className = 'preflight-ok';
+      okLine.textContent = okMsg;
+      okLine.style.fontSize = '13px';
+      section.appendChild(okLine);
+
+      if (status !== 'ok') {
+        var warnLine = document.createElement('div');
+        warnLine.className = 'preflight-' + status;
+        warnLine.textContent = issueMsg;
+        warnLine.style.fontSize = '13px';
+        section.appendChild(warnLine);
+      }
+
+      if (items && items.length > 0) {
+        var list = document.createElement('div');
+        list.className = 'preflight-list';
+        items.forEach(function(item) {
+          var d = document.createElement('div');
+          d.textContent = item;
+          list.appendChild(d);
+        });
+        section.appendChild(list);
+      }
+
+      container.appendChild(section);
+    }
+
+    // ─── Import ───
+    async function runImport() {
+      showStep('step-progress');
+
+      var logEl = document.getElementById('progress-log');
+      var barEl = document.getElementById('progress-bar');
+      var textEl = document.getElementById('progress-text');
+      logEl.textContent = '';
+
+      var imported = 0;
+      var skipped = 0;
+      var errors = 0;
+
+      function log(msg, type) {
+        var ts = new Date().toLocaleTimeString('en-GB');
+        var span = document.createElement('span');
+        span.className = 'log-' + (type || 'success');
+        span.textContent = '[' + ts + '] ' + msg;
+        logEl.appendChild(span);
+        logEl.appendChild(document.createElement('br'));
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // Build records, skipping dupes
+      var records = [];
+      parsedBillingRows.forEach(function(row) {
+        var isAddType = ADD_TYPES.indexOf(row.type.toLowerCase().trim()) !== -1;
+        var acctId = isAddType ? '' : (accountIdMap[row.accountClean.toLowerCase().trim()] || '');
+        var areaKey = row.zone.toLowerCase().trim() + '||' + row.area.toLowerCase().trim();
+        var areaId = areaIdMap[areaKey] || '';
+        var billingKey = acctId + '|' + areaId + '|' + row.month + '|' + row.year;
+
+        if (existingKeys.has(billingKey)) {
+          skipped++;
+          return;
+        }
+        existingKeys.add(billingKey);
+
+        records.push({
+          billing_id: generateId('bill'),
+          account_id: acctId,
+          area_id: areaId,
+          account_name: row.accountClean,
+          zone: row.zone,
+          area: row.area,
+          month: row.month,
+          year: row.year,
+          amount: String(row.amount),
+          type: row.type,
+          notes: row.notes,
+          is_deleted: 'FALSE',
+          created_by: CONFIG.CURRENT_USER,
+          created_at: nowISO()
+        });
+      });
+
+      if (records.length > 0) {
+        log('Sample record: amount=' + records[0].amount + ' account=' + records[0].account_name + ' month=' + records[0].month + '/' + records[0].year, 'info');
+      }
+      log('Importing ' + records.length + ' billing records (skipping ' + skipped + ' dupes)...', 'info');
+
+      function delay(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+
+      var totalBatches = Math.ceil(records.length / BATCH_SIZE);
+      for (var i = 0; i < records.length; i += BATCH_SIZE) {
+        var batch = records.slice(i, i + BATCH_SIZE);
+        var batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        var success = false;
+
+        for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+          try {
+            await SheetsAPI.batchAppend(CONFIG.SHEETS.BILLING, batch);
+            imported += batch.length;
+            log('Batch ' + batchNum + '/' + totalBatches + ': ' + batch.length + ' records', 'success');
+            success = true;
+            break;
+          } catch (e) {
+            if (attempt < MAX_RETRIES) {
+              log('Batch ' + batchNum + ' attempt ' + attempt + ' failed, retrying in 2s... (' + e.message + ')', 'info');
+              await delay(2000);
+            } else {
+              errors += batch.length;
+              log('FAILED batch ' + batchNum + ' after ' + MAX_RETRIES + ' attempts: ' + e.message, 'error');
+            }
+          }
+        }
+
+        // Throttle between batches
+        if (i + BATCH_SIZE < records.length) {
+          await delay(BATCH_DELAY_MS);
+        }
+        var pct = Math.round(((i + batch.length) / records.length) * 100);
+        barEl.style.width = pct + '%';
+        textEl.textContent = 'Importing: ' + (i + batch.length) + ' of ' + records.length + ' (' + pct + '%)';
+      }
+
+      log('Import complete!', 'info');
+      showSummary(imported, skipped, errors);
+    }
+
+    // ─── Summary ───
+    function showSummary(imported, skipped, errors) {
+      showStep('step-summary');
+      var el = document.getElementById('summary-cards');
+      el.textContent = '';
+      var cards = [
+        { val: imported, lbl: 'Records Imported' },
+        { val: skipped, lbl: 'Dupes Skipped' }
+      ];
+      if (errors > 0) cards.push({ val: errors, lbl: 'Errors', cls: 'err' });
+
+      cards.forEach(function(c) {
+        var div = document.createElement('div');
+        div.className = 'summary-card' + (c.cls ? ' ' + c.cls : '');
+        var valDiv = document.createElement('div');
+        valDiv.className = 'val';
+        valDiv.textContent = c.val;
+        var lblDiv = document.createElement('div');
+        lblDiv.className = 'lbl';
+        lblDiv.textContent = c.lbl;
+        div.appendChild(valDiv);
+        div.appendChild(lblDiv);
+        el.appendChild(div);
+      });
+    }
+
+    // ─── File Handling ───
+    function handleFile(file) {
+      if (!file) return;
+      var reader = new FileReader();
+      reader.onload = async function(e) {
+        parseExcel(new Uint8Array(e.target.result));
+        if (parsedBillingRows.length === 0) {
+          showToast('No billing data found', 'error');
+          return;
+        }
+        await runPreflight();
+      };
+      reader.readAsArrayBuffer(file);
+      document.getElementById('dropArea').classList.add('has-file');
+      document.getElementById('dropLabel').textContent = file.name;
+    }
+
+    // ─── Navigation ───
+    function showStep(id) {
+      document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById(id).classList.add('active');
+    }
+
+    function resetImport() {
+      parsedBillingRows = [];
+      unmatchedAccounts = new Set();
+      unmatchedAreas = new Set();
+      existingKeys = new Set();
+      document.getElementById('dropArea').classList.remove('has-file');
+      var label = document.getElementById('dropLabel');
+      label.textContent = '';
+      var strong = document.createElement('strong');
+      strong.textContent = 'Click to select';
+      label.appendChild(strong);
+      label.appendChild(document.createTextNode(' or drag & drop your .xlsx file'));
+      document.getElementById('fileInput').value = '';
+      showStep('step-upload');
+    }
+
+    // ─── Drop Zone ───
+    document.addEventListener('DOMContentLoaded', function() {
+      var dropArea = document.getElementById('dropArea');
+      var fileInput = document.getElementById('fileInput');
+      dropArea.addEventListener('click', function() { fileInput.click(); });
+      dropArea.addEventListener('dragover', function(e) { e.preventDefault(); dropArea.classList.add('drag-over'); });
+      dropArea.addEventListener('dragleave', function() { dropArea.classList.remove('drag-over'); });
+      dropArea.addEventListener('drop', function(e) {
+        e.preventDefault(); dropArea.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+      });
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files.length) handleFile(fileInput.files[0]);
+      });
+    });
+
+    (async function() { await initApp(); })();
+  </script>
+</body>
+</html>

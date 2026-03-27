@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .billing-table-wrap { overflow-x: auto; max-width: 100%; }
+    .billing-table { border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+    .billing-table th, .billing-table td { padding: 4px 8px; border: 1px solid var(--color-gray-200); }
+    .billing-table th {
+      font-family: var(--font-ui); font-size: 9px; font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-gray-500);
+      background: var(--color-gray-100); position: sticky; top: 0; z-index: 2;
+    }
+    .billing-table .sticky-col { position: sticky; background: var(--color-white); z-index: 1; }
+    .billing-table th.sticky-col { z-index: 3; background: var(--color-gray-100); }
+    .billing-table .col-account { left: 0; min-width: 140px; }
+    .billing-table .col-area { left: 140px; min-width: 90px; }
+    .billing-table .col-type { left: 230px; min-width: 60px; }
+    .billing-table td.amount { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; }
+    .billing-table td.amount.has-value { background: #f0faf4; }
+    .billing-table tr:hover td { background: var(--color-gray-50); }
+    .billing-table tr:hover td.has-value { background: #e0f5e9; }
+    .billing-total td { font-weight: 600; background: var(--color-gray-100) !important; }
+
+    .zone-group-row td {
+      font-family: var(--font-ui); font-size: 10px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-white);
+      padding: 5px 8px; border: none; cursor: pointer; user-select: none;
+    }
+    .zone-group-row td .zone-toggle { display: inline-block; width: 14px; transition: transform 0.15s; }
+    .zone-group-row.collapsed td .zone-toggle { transform: rotate(-90deg); }
+    .zone-group-row td .zone-total { font-weight: 400; font-size: 9px; opacity: 0.85; margin-left: 8px; }
+    .zone-group-row td .zone-col-totals { float: right; font-weight: 400; font-size: 9px; opacity: 0.85; }
+
+    .billing-table tr.type-old td { color: var(--color-gray-400); }
+    .billing-table tr.type-old td.has-value { background: #fafafa; }
+    .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
+
+    .billing-table tr:hover td.sticky-col { z-index: 3; background: var(--color-gray-50); }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main" style="max-width:none;">
+      <div class="breadcrumbs"><a href="index.html">Dashboard</a> / Billing</div>
+      <div class="page-header">
+        <h1 class="page-title">Billing Forecast</h1>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" class="search-input" id="search" placeholder="Search account or area...">
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
+          <input type="checkbox" id="show-old"> Show old
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
+          <input type="checkbox" id="hide-vacant"> Hide vacant
+        </label>
+        <span id="record-count" style="font-family:var(--font-ui);font-size:11px;color:var(--color-gray-400);margin-left:auto;"></span>
+      </div>
+
+      <div class="billing-table-wrap" id="table-wrap">
+        <p style="padding:20px;color:var(--color-gray-400);font-family:var(--font-ui);font-size:13px;">Loading billing data...</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/lookups.js"></script>
+  <script>
+    var ZONE_COLOURS = [
+      '#4a5568', '#2b6cb0', '#2f855a', '#9b2c2c', '#744210',
+      '#553c9a', '#1a535c', '#6b3fa0', '#b7410e', '#2d3748'
+    ];
+
+    var allRows = [];
+    var allCols = [];
+    var showOld = false;
+    var hideVacant = false;
+
+    async function loadBilling() {
+      var data = await SheetsAPI.batchGet([CONFIG.SHEETS.BILLING, CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS]);
+      var billing = (data.Billing || []).filter(function(b) { return b.is_deleted !== 'TRUE'; });
+      var accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      var areas = (data.Area || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+
+      var acctNames = {};
+      accounts.forEach(function(a) { acctNames[a.account_id] = a.name; });
+
+      var colSet = {};
+      var rowMap = {};
+
+      billing.forEach(function(b) {
+        var acctName = b.account_name || acctNames[b.account_id] || b.account_id || '';
+        var zone = b.zone || '';
+        var area = b.area || '';
+        var type = (b.type || '').toLowerCase().trim();
+        var month = (b.month || '').toUpperCase();
+        var year = b.year || '';
+        var amount = parseFloat(b.amount) || 0;
+        if (!month || !year) return;
+
+        var colKey = month + ' ' + year;
+        colSet[colKey] = { month: month, year: year };
+
+        var rowKey = acctName.toLowerCase() + '|' + zone.toLowerCase() + '|' + area.toLowerCase();
+        if (!rowMap[rowKey]) {
+          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, amounts: {} };
+        }
+        // If any billing record for this row is 'old' or 'add old', mark the whole row old
+        if (type === 'old' || type === 'add old') rowMap[rowKey].type = 'old';
+        rowMap[rowKey].amounts[colKey] = (rowMap[rowKey].amounts[colKey] || 0) + amount;
+      });
+
+      var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
+      allCols = Object.keys(colSet).sort(function(a, b) {
+        var ca = colSet[a], cb = colSet[b];
+        var d = parseInt(cb.year) - parseInt(ca.year); // newest first
+        if (d !== 0) return d;
+        return (monthOrder[cb.month] || 0) - (monthOrder[ca.month] || 0);
+      });
+
+      // Inject vacant rows for current areas with no active billing
+      var activeAreaKeys = {};
+      Object.values(rowMap).forEach(function(r) {
+        if (r.type !== 'old') {
+          activeAreaKeys[(r.zone || '').toLowerCase() + '|' + (r.area || '').toLowerCase()] = true;
+        }
+      });
+      areas.forEach(function(a) {
+        var cur = (a.current || '').toString().toLowerCase().trim();
+        if (cur !== 'true' && cur !== 'yes' && cur !== 'y' && cur !== '1' && cur !== 'x') return;
+        var key = (a.zone || '').toLowerCase() + '|' + (a.area || '').toLowerCase();
+        if (!activeAreaKeys[key]) {
+          var rowKey = '(vacant)|' + key;
+          if (!rowMap[rowKey]) {
+            rowMap[rowKey] = { account_name: '(vacant)', zone: a.zone || '', area: a.area || '', type: 'vacant', amounts: {} };
+          }
+        }
+      });
+
+      // Sort by zone (using lookup order, unlisted zones alphabetically after), then area, then account
+      var zoneOrder = Lookups.get('zone');
+      allRows = Object.values(rowMap).sort(function(a, b) {
+        var ai = zoneOrder.indexOf(a.zone);
+        var bi = zoneOrder.indexOf(b.zone);
+        if (ai === -1 && bi === -1) {
+          var zc = a.zone.localeCompare(b.zone);
+          if (zc !== 0) return zc;
+        } else {
+          if (ai === -1) ai = 9999;
+          if (bi === -1) bi = 9999;
+          if (ai !== bi) return ai - bi;
+        }
+        return a.area.localeCompare(b.area)
+          || a.account_name.localeCompare(b.account_name);
+      });
+
+      renderTable();
+    }
+
+    function renderTable() {
+      var wrap = document.getElementById('table-wrap');
+      var countEl = document.getElementById('record-count');
+      var filter = document.getElementById('search').value;
+
+      var filtered = allRows;
+      if (!showOld) {
+        filtered = filtered.filter(function(r) { return r.type !== 'old'; });
+      }
+      if (hideVacant) {
+        filtered = filtered.filter(function(r) { return r.type !== 'vacant'; });
+      }
+      if (filter) {
+        var q = filter.toLowerCase();
+        filtered = filtered.filter(function(r) {
+          return r.account_name.toLowerCase().indexOf(q) !== -1
+            || r.zone.toLowerCase().indexOf(q) !== -1
+            || r.area.toLowerCase().indexOf(q) !== -1;
+        });
+      }
+
+      countEl.textContent = filtered.length + ' rows';
+
+      // Assign colours to zones
+      var zones = [];
+      filtered.forEach(function(r) {
+        if (zones.indexOf(r.zone) === -1 && r.zone) zones.push(r.zone);
+      });
+      var zoneColour = {};
+      zones.forEach(function(z, i) { zoneColour[z] = ZONE_COLOURS[i % ZONE_COLOURS.length]; });
+
+      var cols = allCols;
+      var table = document.createElement('table');
+      table.className = 'billing-table';
+
+      // Header
+      var thead = document.createElement('thead');
+      var tr = document.createElement('tr');
+      ['Account', 'Area', 'Type'].forEach(function(label, i) {
+        var th = document.createElement('th');
+        th.className = 'sticky-col col-' + ['account', 'area', 'type'][i];
+        th.textContent = label;
+        tr.appendChild(th);
+      });
+      cols.forEach(function(col) {
+        var th = document.createElement('th');
+        th.textContent = col;
+        tr.appendChild(th);
+      });
+      thead.appendChild(tr);
+      table.appendChild(thead);
+
+      // Body with zone groups
+      var tbody = document.createElement('tbody');
+      var colTotals = {};
+      cols.forEach(function(c) { colTotals[c] = 0; });
+      var currentZone = null;
+      var colCount = 3 + cols.length;
+
+      // Pre-calculate zone totals
+      var zoneTotals = {};
+      filtered.forEach(function(row) {
+        if (row.type === 'old' || row.type === 'vacant') return;
+        var z = row.zone || 'No Zone';
+        if (!zoneTotals[z]) { zoneTotals[z] = {}; cols.forEach(function(c) { zoneTotals[z][c] = 0; }); }
+        cols.forEach(function(col) { zoneTotals[z][col] += (row.amounts[col] || 0); });
+      });
+
+      filtered.forEach(function(row) {
+        // Zone group header
+        if (row.zone !== currentZone) {
+          currentZone = row.zone;
+          var zoneName = currentZone || 'No Zone';
+          var zt = zoneTotals[zoneName] || {};
+          var bgCol = zoneColour[currentZone] || '#4a5568';
+          var ztr = document.createElement('tr');
+          ztr.className = 'zone-group-row';
+          ztr.setAttribute('data-zone', zoneName);
+
+          // Zone label spanning account + area columns
+          var ztd = document.createElement('td');
+          ztd.colSpan = 3;
+          ztd.style.background = bgCol;
+          var toggle = document.createElement('span');
+          toggle.className = 'zone-toggle';
+          toggle.textContent = '\u25BC';
+          ztd.appendChild(toggle);
+          ztd.appendChild(document.createTextNode(' ' + zoneName));
+          ztr.appendChild(ztd);
+
+          // One cell per month column with zone total
+          cols.forEach(function(col) {
+            var td = document.createElement('td');
+            td.style.background = bgCol;
+            td.style.textAlign = 'right';
+            td.style.fontFamily = "'SF Mono', 'Fira Code', monospace";
+            var val = zt[col] || 0;
+            if (val) {
+              td.textContent = val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            ztr.appendChild(td);
+          });
+          ztr.addEventListener('click', function() {
+            ztr.classList.toggle('collapsed');
+            var hide = ztr.classList.contains('collapsed');
+            var next = ztr.nextElementSibling;
+            while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
+              next.style.display = hide ? 'none' : '';
+              next = next.nextElementSibling;
+            }
+          });
+          tbody.appendChild(ztr);
+        }
+
+        var tr = document.createElement('tr');
+        tr.setAttribute('data-zone', row.zone || 'No Zone');
+        if (row.type === 'old') tr.className = 'type-old';
+        if (row.type === 'vacant') tr.className = 'type-vacant';
+
+        var tdAcct = document.createElement('td');
+        tdAcct.className = 'sticky-col col-account';
+        tdAcct.textContent = row.account_name;
+        tr.appendChild(tdAcct);
+
+        var tdArea = document.createElement('td');
+        tdArea.className = 'sticky-col col-area';
+        tdArea.textContent = row.area;
+        tr.appendChild(tdArea);
+
+        var tdType = document.createElement('td');
+        tdType.className = 'sticky-col col-type';
+        tdType.textContent = row.type;
+        tr.appendChild(tdType);
+
+        cols.forEach(function(col) {
+          var td = document.createElement('td');
+          td.className = 'amount';
+          var val = row.amounts[col];
+          if (val != null) {
+            td.textContent = val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            td.classList.add('has-value');
+            if (row.type !== 'old') colTotals[col] += val;
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      // Totals row
+      var totalTr = document.createElement('tr');
+      totalTr.className = 'billing-total';
+      var tdLabel = document.createElement('td');
+      tdLabel.className = 'sticky-col col-account';
+      tdLabel.textContent = 'Total';
+      totalTr.appendChild(tdLabel);
+      totalTr.appendChild(document.createElement('td'));
+      totalTr.appendChild(document.createElement('td'));
+
+      cols.forEach(function(col) {
+        var td = document.createElement('td');
+        td.className = 'amount';
+        if (colTotals[col]) {
+          td.textContent = colTotals[col].toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        totalTr.appendChild(td);
+      });
+      tbody.appendChild(totalTr);
+
+      table.appendChild(tbody);
+      wrap.textContent = '';
+      wrap.appendChild(table);
+    }
+
+    (async function() {
+      await initApp();
+      await Lookups.load();
+      document.getElementById('search').addEventListener('input', renderTable);
+      document.getElementById('show-old').addEventListener('change', function() {
+        showOld = this.checked;
+        renderTable();
+      });
+      document.getElementById('hide-vacant').addEventListener('change', function() {
+        hideVacant = this.checked;
+        renderTable();
+      });
+      await loadBilling();
+    })();
+  </script>
+</body>
+</html>

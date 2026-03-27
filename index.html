@@ -45,8 +45,8 @@
       await initApp();
       try {
         const data = await SheetsAPI.batchGet([CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.CONTACTS]);
-        document.getElementById('stat-accounts').textContent = data.Accounts.length;
-        document.getElementById('stat-contacts').textContent = data.Contacts.length;
+        document.getElementById('stat-accounts').textContent = data.Accounts.filter(a => a.is_deleted !== 'TRUE').length;
+        document.getElementById('stat-contacts').textContent = data.Contacts.filter(c => c.is_deleted !== 'TRUE').length;
       } catch (e) {
         console.warn('[dashboard] Could not load stats:', e);
       }

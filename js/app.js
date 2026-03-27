@@ -57,3 +57,66 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+
+// ─── Sortable Table Headers ───
+// Call once after the table is in the DOM.
+// columns: array of { key, label } or just strings (key used as label).
+// getData: function returning the current filtered array.
+// renderFn: function(sortedData) to re-render the tbody.
+
+function makeSortable(tableSelector, columns, getData, renderFn) {
+  const thead = document.querySelector(tableSelector + ' thead tr');
+  if (!thead) return;
+
+  let sortCol = null;
+  let sortAsc = true;
+
+  // Replace existing <th> elements with sortable ones
+  thead.textContent = '';
+  columns.forEach(function(col) {
+    const key = typeof col === 'string' ? col : col.key;
+    const label = typeof col === 'string' ? col : col.label;
+    const th = document.createElement('th');
+    th.style.cursor = 'pointer';
+    th.style.userSelect = 'none';
+    th.dataset.sortKey = key;
+    th.textContent = label;
+
+    const arrow = document.createElement('span');
+    arrow.className = 'sort-arrow';
+    arrow.style.marginLeft = '4px';
+    arrow.style.opacity = '0.3';
+    arrow.textContent = '\u2195';
+    th.appendChild(arrow);
+
+    th.addEventListener('click', function() {
+      if (sortCol === key) {
+        sortAsc = !sortAsc;
+      } else {
+        sortCol = key;
+        sortAsc = true;
+      }
+
+      // Update arrows
+      thead.querySelectorAll('.sort-arrow').forEach(function(a) {
+        a.textContent = '\u2195';
+        a.style.opacity = '0.3';
+      });
+      arrow.textContent = sortAsc ? '\u2191' : '\u2193';
+      arrow.style.opacity = '1';
+
+      // Sort and re-render
+      var data = getData().slice();
+      data.sort(function(a, b) {
+        var va = (a[key] || '').toString().toLowerCase();
+        var vb = (b[key] || '').toString().toLowerCase();
+        if (va < vb) return sortAsc ? -1 : 1;
+        if (va > vb) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      renderFn(data);
+    });
+
+    thead.appendChild(th);
+  });
+}

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Lookups — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .lookups-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .lookup-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .lookup-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #fafbfc;
+      border-bottom: 2px solid #eaeaea;
+      font-weight: 600;
+      font-size: 0.95rem;
+      color: #1a1a2e;
+    }
+    .lookup-card-body {
+      padding: 12px 16px;
+    }
+    .lookup-item {
+      display: flex;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 0.9rem;
+      gap: 4px;
+    }
+    .lookup-item:last-child { border-bottom: none; }
+    .lookup-item-text { color: #333; flex: 1; }
+    .lookup-item-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .lookup-item-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 4px;
+      line-height: 1;
+      border-radius: 3px;
+    }
+    .lookup-item-btn:hover { color: #555; background: #f0f0f0; }
+    .lookup-item-btn.remove:hover { color: #e74c3c; background: #fef2f2; }
+    .lookup-item-btn.disabled { color: #e8e8e8; cursor: default; pointer-events: none; }
+    .lookup-item.dragging { opacity: 0.4; }
+    .lookup-item.drag-over { border-top: 2px solid var(--color-primary); }
+    .lookup-add-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #eaeaea;
+    }
+    .lookup-add-row input {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+    .lookup-add-row button {
+      padding: 6px 12px;
+      background: var(--color-primary);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .lookup-add-row button:hover { opacity: 0.9; }
+
+    .new-lookup-form {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+      margin-bottom: 24px;
+    }
+    .new-lookup-form .form-group { margin: 0; }
+    .new-lookup-form input {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      width: 240px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="index.html">Dashboard</a> / <a href="settings.html">Settings</a> / Lookups</div>
+      <div class="page-header">
+        <h1 class="page-title">Manage Lookups</h1>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="addNewLookup()">+ New Lookup</button>
+        </div>
+      </div>
+
+      <div id="new-lookup-section" style="display:none;">
+        <div class="new-lookup-form">
+          <div class="form-group">
+            <label class="form-label">Lookup Name (snake_case)</label>
+            <input type="text" id="new-lookup-name" placeholder="e.g. payment_terms">
+          </div>
+          <button class="btn btn-primary" onclick="createLookup()">Create</button>
+          <button class="btn btn-secondary" onclick="cancelNewLookup()">Cancel</button>
+        </div>
+      </div>
+
+      <div id="lookups-container" class="lookups-grid">
+        <div style="padding:20px;color:var(--color-gray-400);font-family:var(--font-ui);font-size:13px;">Loading lookups...</div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/lookups-page.js"></script>
+  <script>
+    (async function() {
+      await initApp();
+      await loadLookups();
+    })();
+  </script>
+</body>
+</html>

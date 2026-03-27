@@ -31,8 +31,12 @@ function doPost(e) {
       return updateRow(sheet, payload.rowIndex, payload.data);
     } else if (action === 'batch_update') {
       return batchUpdate(sheet, payload.updates);
+    } else if (action === 'batch_append') {
+      return batchAppend(sheet, payload.rows);
     } else if (action === 'delete') {
       return deleteRow(sheet, payload.rowIndex);
+    } else if (action === 'clear_and_write') {
+      return clearAndWrite(sheet, payload.values);
     } else {
       return jsonResponse({ error: 'Unknown action: ' + action });
     }
@@ -46,6 +50,17 @@ function appendRow(sheet, data) {
   var row = headers.map(function(h) { return data[h] || ''; });
   sheet.appendRow(row);
   return jsonResponse({ success: true, action: 'append' });
+}
+
+function batchAppend(sheet, rows) {
+  if (!rows || !rows.length) return jsonResponse({ success: true, action: 'batch_append', count: 0 });
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var grid = rows.map(function(data) {
+    return headers.map(function(h) { return data[h] || ''; });
+  });
+  var startRow = sheet.getLastRow() + 1;
+  sheet.getRange(startRow, 1, grid.length, headers.length).setValues(grid);
+  return jsonResponse({ success: true, action: 'batch_append', count: rows.length });
 }
 
 function updateRow(sheet, rowIndex, data) {
@@ -68,6 +83,13 @@ function batchUpdate(sheet, updates) {
 function deleteRow(sheet, rowIndex) {
   sheet.deleteRow(rowIndex + 2);
   return jsonResponse({ success: true, action: 'delete' });
+}
+
+function clearAndWrite(sheet, values) {
+  if (!values || !values.length) return jsonResponse({ error: 'No values provided' });
+  sheet.clear();
+  sheet.getRange(1, 1, values.length, values[0].length).setValues(values);
+  return jsonResponse({ success: true, action: 'clear_and_write', rows: values.length });
 }
 
 function jsonResponse(obj) {

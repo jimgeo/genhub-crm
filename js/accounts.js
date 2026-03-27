@@ -3,25 +3,65 @@
  */
 
 let _allAccounts = [];
+let _filteredAccounts = [];
+let _showInactive = false;
+
+const ACCOUNT_COLUMNS = [
+  { key: 'name', label: 'Name' },
+  { key: 'type', label: 'Type' },
+  { key: 'current', label: 'Active' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'email', label: 'Email' },
+  { key: 'city', label: 'City' }
+];
 
 // ─── List ───
 
+function applyAccountFilters() {
+  const search = document.getElementById('search');
+  const q = (search ? search.value : '').toLowerCase().trim();
+
+  _filteredAccounts = _allAccounts.filter(a => {
+    // Active filter
+    if (!_showInactive && !isActive(a)) return false;
+    // Search filter
+    if (q) {
+      return (a.name || '').toLowerCase().includes(q) ||
+        (a.type || '').toLowerCase().includes(q) ||
+        (a.email || '').toLowerCase().includes(q) ||
+        (a.city || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  renderAccountsTable(_filteredAccounts);
+}
+
+function isActive(account) {
+  var v = (account.current || '').toString().toLowerCase().trim();
+  return v === 'true' || v === 'yes' || v === 'y' || v === '1' || v === 'x';
+}
+
 async function loadAccountsList() {
-  _allAccounts = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
-  renderAccountsTable(_allAccounts);
+  var raw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
+  _allAccounts = raw.filter(a => a.is_deleted !== 'TRUE');
+  applyAccountFilters();
+
+  makeSortable('.table-wrapper table', ACCOUNT_COLUMNS,
+    function() { return _filteredAccounts; },
+    renderAccountsTable
+  );
 
   const search = document.getElementById('search');
   if (search) {
-    search.addEventListener('input', () => {
-      const q = search.value.toLowerCase().trim();
-      const filtered = q
-        ? _allAccounts.filter(a =>
-            (a.name || '').toLowerCase().includes(q) ||
-            (a.type || '').toLowerCase().includes(q) ||
-            (a.email || '').toLowerCase().includes(q) ||
-            (a.city || '').toLowerCase().includes(q))
-        : _allAccounts;
-      renderAccountsTable(filtered);
+    search.addEventListener('input', applyAccountFilters);
+  }
+
+  const toggle = document.getElementById('show-inactive');
+  if (toggle) {
+    toggle.addEventListener('change', function() {
+      _showInactive = toggle.checked;
+      applyAccountFilters();
     });
   }
 }
@@ -37,7 +77,7 @@ function renderAccountsTable(accounts) {
     tbody.textContent = '';
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 5;
+    td.colSpan = 6;
     td.className = 'table-empty';
     td.textContent = 'No accounts found';
     tr.appendChild(td);
@@ -48,9 +88,14 @@ function renderAccountsTable(accounts) {
   tbody.textContent = '';
   accounts.forEach(a => {
     const tr = document.createElement('tr');
+    if (!isActive(a)) {
+      tr.style.opacity = '0.5';
+      tr.style.background = 'var(--color-gray-100)';
+    }
     tr.onclick = () => { window.location.href = 'account-detail.html?id=' + encodeURIComponent(a.account_id); };
 
-    const fields = [a.name, a.type, a.phone, a.email, a.city];
+    const active = isActive(a) ? 'Yes' : 'No';
+    const fields = [a.name, a.type, active, a.phone, a.email, a.city];
     fields.forEach(val => {
       const td = document.createElement('td');
       td.textContent = val || '';
@@ -94,8 +139,9 @@ async function loadAccountDetail() {
 
   document.getElementById('btn-delete').style.display = '';
 
-  // Load linked contacts
+  // Load linked contacts and areas
   await loadLinkedContacts(id);
+  await loadLinkedAreas(id);
 }
 
 async function loadLinkedContacts(accountId) {
@@ -103,7 +149,7 @@ async function loadLinkedContacts(accountId) {
   if (!section) return;
 
   const contacts = await SheetsAPI.getAll(CONFIG.SHEETS.CONTACTS);
-  const linked = contacts.filter(c => c.account_id === accountId);
+  const linked = contacts.filter(c => c.account_id === accountId && c.is_deleted !== 'TRUE');
 
   section.style.display = '';
   const addLink = document.getElementById('add-contact-link');
@@ -116,7 +162,7 @@ async function loadLinkedContacts(accountId) {
   if (linked.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
-    td.colSpan = 4;
+    td.colSpan = 6;
     td.className = 'table-empty';
     td.textContent = 'No contacts linked to this account';
     tr.appendChild(td);
@@ -125,13 +171,73 @@ async function loadLinkedContacts(accountId) {
   }
 
   linked.forEach(c => {
+    const contactCurrent = (c.current || '').toString().toLowerCase().trim();
+    const isCurrent = contactCurrent === 'true' || contactCurrent === 'yes' || contactCurrent === 'y' || contactCurrent === '1' || contactCurrent === 'x';
+    const isPrimary = (c.primary || '').toString().toLowerCase().trim();
+    const primaryDisplay = (isPrimary === 'true' || isPrimary === 'yes' || isPrimary === 'y' || isPrimary === '1' || isPrimary === 'x') ? 'Yes' : 'No';
+
     const tr = document.createElement('tr');
+    if (!isCurrent) {
+      tr.style.opacity = '0.5';
+      tr.style.background = 'var(--color-gray-100)';
+    }
     tr.onclick = () => { window.location.href = 'contact-detail.html?id=' + encodeURIComponent(c.contact_id); };
 
     const fullName = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
-    [fullName, c.email, c.phone, c.job_title].forEach(val => {
+    [fullName, c.email, c.phone, c.job_title, primaryDisplay, isCurrent ? 'Yes' : 'No'].forEach(val => {
       const td = document.createElement('td');
       td.textContent = val || '';
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadLinkedAreas(accountId) {
+  var section = document.getElementById('areas-section');
+  if (!section) return;
+
+  var data = await SheetsAPI.batchGet([CONFIG.SHEETS.ACCOUNT_AREAS, CONFIG.SHEETS.AREAS]);
+  var links = (data.Account_Areas || []).filter(function(l) {
+    return l.account_id === accountId && l.is_deleted !== 'TRUE';
+  });
+  var areas = (data.Area || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+  var areaMap = {};
+  areas.forEach(function(a) { areaMap[a.area_id] = a; });
+
+  section.style.display = '';
+
+  var tbody = document.getElementById('areas-tbody');
+  if (!tbody) return;
+
+  tbody.textContent = '';
+  if (links.length === 0) {
+    var tr = document.createElement('tr');
+    var td = document.createElement('td');
+    td.colSpan = 6;
+    td.className = 'table-empty';
+    td.textContent = 'No areas linked to this account';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  links.forEach(function(link) {
+    var area = areaMap[link.area_id] || {};
+    var linkCurrent = (link.current || '').toString().toLowerCase().trim();
+    var isCur = linkCurrent === 'true' || linkCurrent === 'yes' || linkCurrent === 'y' || linkCurrent === '1' || linkCurrent === 'x';
+
+    var tr = document.createElement('tr');
+    if (!isCur) {
+      tr.style.opacity = '0.5';
+      tr.style.background = 'var(--color-gray-100)';
+    }
+    tr.onclick = function() { window.location.href = 'area-detail.html?id=' + encodeURIComponent(link.area_id); };
+
+    [area.zone || '', area.area || '', area.single_multi || '', link.date_from || '', link.date_to || '', isCur ? 'Yes' : 'No'].forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
       tr.appendChild(td);
     });
 
@@ -177,10 +283,11 @@ async function saveAccount() {
 
 async function deleteAccount() {
   if (!_editingAccount || _editingIndex < 0) return;
-  if (!confirm('Delete this account? This cannot be undone.')) return;
+  if (!confirm('Delete this account? It will be marked as deleted.')) return;
 
   try {
-    await SheetsAPI.deleteRow(CONFIG.SHEETS.ACCOUNTS, _editingIndex);
+    const updated = { ..._editingAccount, is_deleted: 'TRUE', modified_by: CONFIG.CURRENT_USER, modified_at: nowISO() };
+    await SheetsAPI.update(CONFIG.SHEETS.ACCOUNTS, _editingIndex, updated);
     showToast('Account deleted');
     setTimeout(() => { window.location.href = 'accounts.html'; }, 500);
   } catch (e) {

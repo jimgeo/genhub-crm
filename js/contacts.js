@@ -3,34 +3,54 @@
  */
 
 let _allContacts = [];
+let _filteredContacts = [];
 let _accountMap = {};
+
+const CONTACT_COLUMNS = [
+  { key: '_fullName', label: 'Name' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Phone' },
+  { key: 'job_title', label: 'Job Title' },
+  { key: '_accountName', label: 'Account' }
+];
 
 // ─── List ───
 
 async function loadContactsList() {
   const data = await SheetsAPI.batchGet([CONFIG.SHEETS.CONTACTS, CONFIG.SHEETS.ACCOUNTS]);
-  _allContacts = data.Contacts || [];
-  const accounts = data.Accounts || [];
+  _allContacts = (data.Contacts || []).filter(c => c.is_deleted !== 'TRUE');
+  const accounts = (data.Accounts || []).filter(a => a.is_deleted !== 'TRUE');
 
   _accountMap = {};
   accounts.forEach(a => { _accountMap[a.account_id] = a.name; });
 
-  renderContactsTable(_allContacts);
+  // Add computed fields for sorting
+  _allContacts.forEach(c => {
+    c._fullName = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
+    c._accountName = _accountMap[c.account_id] || '';
+  });
+
+  _filteredContacts = _allContacts;
+  renderContactsTable(_filteredContacts);
+
+  makeSortable('.table-wrapper table', CONTACT_COLUMNS,
+    function() { return _filteredContacts; },
+    renderContactsTable
+  );
 
   const search = document.getElementById('search');
   if (search) {
     search.addEventListener('input', () => {
       const q = search.value.toLowerCase().trim();
-      const filtered = q
+      _filteredContacts = q
         ? _allContacts.filter(c => {
-            const fullName = ((c.first_name || '') + ' ' + (c.last_name || '')).toLowerCase();
-            return fullName.includes(q) ||
+            return (c._fullName || '').toLowerCase().includes(q) ||
               (c.email || '').toLowerCase().includes(q) ||
               (c.job_title || '').toLowerCase().includes(q) ||
-              (_accountMap[c.account_id] || '').toLowerCase().includes(q);
+              (c._accountName || '').toLowerCase().includes(q);
           })
         : _allContacts;
-      renderContactsTable(filtered);
+      renderContactsTable(_filteredContacts);
     });
   }
 }
@@ -59,9 +79,7 @@ function renderContactsTable(contacts) {
     const tr = document.createElement('tr');
     tr.onclick = () => { window.location.href = 'contact-detail.html?id=' + encodeURIComponent(c.contact_id); };
 
-    const fullName = ((c.first_name || '') + ' ' + (c.last_name || '')).trim();
-    const accountName = _accountMap[c.account_id] || '';
-    [fullName, c.email, c.phone, c.job_title, accountName].forEach(val => {
+    [c._fullName, c.email, c.phone, c.job_title, c._accountName].forEach(val => {
       const td = document.createElement('td');
       td.textContent = val || '';
       tr.appendChild(td);
@@ -81,8 +99,8 @@ async function loadContactDetail() {
   const isNew = getParam('new');
   const presetAccountId = getParam('account_id');
 
-  // Load accounts for dropdown
-  const accounts = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
+  // Load accounts for dropdown (only non-deleted)
+  const accounts = (await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS)).filter(a => a.is_deleted !== 'TRUE');
   const select = document.getElementById('f-account_id');
   if (select) {
     accounts.forEach(a => {
@@ -156,10 +174,11 @@ async function saveContact() {
 
 async function deleteContact() {
   if (!_editingContact || _editingContactIndex < 0) return;
-  if (!confirm('Delete this contact? This cannot be undone.')) return;
+  if (!confirm('Delete this contact? It will be marked as deleted.')) return;
 
   try {
-    await SheetsAPI.deleteRow(CONFIG.SHEETS.CONTACTS, _editingContactIndex);
+    const updated = { ..._editingContact, is_deleted: 'TRUE', modified_by: CONFIG.CURRENT_USER, modified_at: nowISO() };
+    await SheetsAPI.update(CONFIG.SHEETS.CONTACTS, _editingContactIndex, updated);
     showToast('Contact deleted');
     setTimeout(() => { window.location.href = 'contacts.html'; }, 500);
   } catch (e) {

@@ -56,6 +56,10 @@ const SheetsAPI = {
     return this._postToProxy({ action: 'append', sheetName, data: rowObject });
   },
 
+  async batchAppend(sheetName, rowObjects) {
+    return this._postToProxy({ action: 'batch_append', sheetName, rows: rowObjects });
+  },
+
   async update(sheetName, rowIndex, rowObject) {
     return this._postToProxy({ action: 'update', sheetName, rowIndex, data: rowObject });
   },

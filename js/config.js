@@ -7,7 +7,10 @@ const CONFIG = {
     ACCOUNTS: 'Accounts',
     CONTACTS: 'Contacts',
     USERS: 'Users',
-    LOOKUPS: 'Lookups'
+    LOOKUPS: 'Lookup',
+    AREAS: 'Area',
+    ACCOUNT_AREAS: 'Account_Areas',
+    BILLING: 'Billing'
   },
 
   BASE_URL: 'https://sheets.googleapis.com/v4/spreadsheets',

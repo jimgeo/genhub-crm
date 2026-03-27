@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Import — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    /* ─── Import-specific styles ─── */
+    .import-steps { max-width: 900px; }
+
+    .file-upload-area {
+      border: 2px dashed var(--color-gray-300);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .file-upload-area:hover,
+    .file-upload-area.drag-over {
+      border-color: var(--color-black);
+      background: var(--color-gray-100);
+    }
+    .file-upload-area.has-file {
+      border-color: var(--color-success);
+      background: #f0faf4;
+    }
+    .file-upload-area .file-icon {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+    .file-upload-area p {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--color-gray-500);
+    }
+    .file-upload-area input[type="file"] { display: none; }
+
+    /* Mapping table */
+    .mapping-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-top: 16px;
+    }
+    .mapping-table th {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--color-gray-500);
+      background: var(--color-gray-100);
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .mapping-table td {
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--color-gray-100);
+      font-family: var(--font-body);
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .tag-account { background: #e0f2fe; color: #0369a1; }
+    .tag-contact { background: #fce7f3; color: #be185d; }
+    .tag-ignore  { background: var(--color-gray-100); color: var(--color-gray-400); }
+    .tag-wait    { background: #fef3c7; color: #92400e; }
+    .tag-bool    { background: #f0fdf4; color: #166534; }
+
+    /* Preview table */
+    .preview-wrapper {
+      overflow-x: auto;
+      max-height: 300px;
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+      margin-top: 16px;
+    }
+    .preview-wrapper table {
+      font-size: 12px;
+      min-width: 600px;
+    }
+    .preview-wrapper td {
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Stats row */
+    .import-stats {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .import-stat {
+      background: var(--color-surface);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+      padding: 12px 20px;
+      text-align: center;
+    }
+    .import-stat .val {
+      font-family: var(--font-heading);
+      font-size: 28px;
+      color: var(--color-black);
+    }
+    .import-stat .lbl {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--color-gray-400);
+    }
+
+    /* Progress */
+    .progress-bar-track {
+      width: 100%;
+      height: 24px;
+      background: var(--color-gray-100);
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--color-info), var(--color-success));
+      border-radius: 12px;
+      transition: width 0.3s ease;
+    }
+    .progress-text {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      color: var(--color-gray-600);
+      margin-bottom: 8px;
+    }
+    .progress-log {
+      background: #1a1a2e;
+      color: #a0e8af;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      padding: 16px;
+      border-radius: var(--radius);
+      max-height: 220px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    .log-error { color: #ff6b6b; }
+    .log-info  { color: #87ceeb; }
+    .log-success { color: #a0e8af; }
+
+    /* Summary cards */
+    .summary-cards {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    .summary-card {
+      background: var(--color-surface);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      padding: 20px 28px;
+      text-align: center;
+      min-width: 140px;
+    }
+    .summary-card .val {
+      font-family: var(--font-heading);
+      font-size: 32px;
+      color: var(--color-black);
+    }
+    .summary-card .lbl {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--color-gray-400);
+      margin-top: 4px;
+    }
+    .summary-card.warn { border-color: var(--color-warning); }
+    .summary-card.warn .val { color: var(--color-warning); }
+    .summary-card.err { border-color: var(--color-danger); }
+    .summary-card.err .val { color: var(--color-danger); }
+
+    .step { display: none; }
+    .step.active { display: block; }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="index.html">Dashboard</a> / Import</div>
+      <div class="page-header">
+        <h1 class="page-title">Import Accounts &amp; Contacts</h1>
+      </div>
+
+      <div class="import-steps">
+
+        <!-- ─── Step 1: Upload ─── -->
+        <div class="step active" id="step-upload">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Upload CSV</h3>
+            </div>
+            <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+              Upload a CSV containing both account and contact data. Unique companies will be extracted as Accounts and each row will create a Contact linked to its Account.
+            </p>
+            <div class="file-upload-area" id="dropArea">
+              <div class="file-icon">&#128196;</div>
+              <p id="dropLabel"><strong>Click to select</strong> or drag &amp; drop your CSV file</p>
+              <input type="file" id="csvFileInput" accept=".csv">
+            </div>
+
+            <div style="margin-top:24px;">
+              <h4 class="card-title" style="margin-bottom:12px;">Field Mapping Reference</h4>
+              <table class="mapping-table">
+                <thead>
+                  <tr><th>CSV Column</th><th>Entity</th><th>Sheet Field</th><th>Type</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Company</td><td><span class="tag tag-account">Account</span></td><td>name</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Current?</td><td><span class="tag tag-account">Account</span></td><td>current</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Notes</td><td><span class="tag tag-account">Account</span></td><td>notes</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Billing Email (if diff)</td><td><span class="tag tag-account">Account</span></td><td>billing_email</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Postal</td><td><span class="tag tag-account">Account</span></td><td>postal</td><td><span class="tag tag-bool">bool</span></td><td>Import</td></tr>
+                  <tr><td>Non-Perm (no contract)</td><td><span class="tag tag-account">Account</span></td><td>non_perm</td><td><span class="tag tag-bool">bool</span></td><td>Import</td></tr>
+                  <tr><td>Notice Period On a Deal</td><td><span class="tag tag-account">Account</span></td><td>notice_period</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Deposit</td><td><span class="tag tag-account">Account</span></td><td>deposit</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Spacebring Setup</td><td><span class="tag tag-account">Account</span></td><td>spacebring_setup</td><td><span class="tag tag-bool">bool</span></td><td>Import</td></tr>
+                  <tr><td>Company Number</td><td><span class="tag tag-account">Account</span></td><td>company_number</td><td>text</td><td>Import</td></tr>
+                  <tr><td>VAT Number</td><td><span class="tag tag-account">Account</span></td><td>vat_number</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Registered Address</td><td><span class="tag tag-account">Account</span></td><td>registered_address</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Name</td><td><span class="tag tag-contact">Contact</span></td><td>full_name / first / last</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Contact Email</td><td><span class="tag tag-contact">Contact</span></td><td>email</td><td>text</td><td>Import</td></tr>
+                  <tr><td>Group / Sub</td><td><span class="tag tag-contact">Contact</span></td><td>primary (inverted)</td><td><span class="tag tag-bool">bool</span></td><td>Import</td></tr>
+                  <tr style="opacity:0.5;"><td>Name in Expected</td><td><span class="tag tag-ignore">Ignore</span></td><td>—</td><td>—</td><td>Skip</td></tr>
+                  <tr style="opacity:0.5;"><td>CLEANED</td><td><span class="tag tag-ignore">Ignore</span></td><td>—</td><td>—</td><td>Skip</td></tr>
+                  <tr style="opacity:0.4;"><td>Deal End Date</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td>—</td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Review</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td>—</td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Desks</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td>—</td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>ARGYLE - VAT 0%</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>NOT ARGYLE - VAT 0%</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Member Schedule Signed</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>T&amp;Cs signed &amp; saved to G Drive</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>INDUCTION Done</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-contact">Contact</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Xero: Deposit+PM invoice</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Xero: Recurring</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Spacebring Billed</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>EXPECTED (added)</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>DEPOSITS</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Docs saved to GDRIVE</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Docs sent to member</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Credit Safe (monitoring on)</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>WELCOME email sent</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>ID Taken (saved to dropbox)</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Physical key given</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-contact">Contact</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>POSTAL Sheet (added)</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>SALTO access given</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-account">Account</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Add to approp. email list</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-contact">Contact</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Add phone to Google Contacts</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-contact">Contact</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                  <tr style="opacity:0.4;"><td>Add to Whatsapp</td><td><span class="tag tag-wait">Wait</span> <span class="tag tag-contact">Contact</span></td><td>—</td><td><span class="tag tag-bool">bool</span></td><td>Later</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div style="margin-top:24px;">
+              <h4 class="card-title" style="margin-bottom:12px;">Import Logic</h4>
+              <table class="mapping-table">
+                <thead>
+                  <tr><th>Rule</th><th>Source</th><th>Target</th><th>Logic</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td>Contact primary flag</td><td>Group / Sub</td><td>Contact.primary</td><td>If Group / Sub is TRUE/Yes → primary = FALSE (sub-contact). If blank/FALSE → primary = TRUE (main contact).</td></tr>
+                  <tr><td>Contact current flag</td><td>Current?</td><td>Contact.current</td><td>If account row Current? is falsy → contact.current = FALSE. Otherwise TRUE.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Step 2: Preview ─── -->
+        <div class="step" id="step-preview">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Preview</h3>
+            </div>
+
+            <div class="import-stats" id="import-stats"></div>
+
+            <h4 style="font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-gray-400);margin-top:20px;">Accounts to create</h4>
+            <div class="preview-wrapper" id="preview-accounts"></div>
+
+            <h4 style="font-family:var(--font-ui);font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--color-gray-400);margin-top:20px;">Contacts to create</h4>
+            <div class="preview-wrapper" id="preview-contacts"></div>
+
+            <div style="margin-top:24px;display:flex;gap:12px;">
+              <button class="btn btn-primary" onclick="runImport()">Import All</button>
+              <button class="btn" onclick="resetImport()">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ─── Step 3: Progress ─── -->
+        <div class="step" id="step-progress">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Importing...</h3>
+            </div>
+            <div class="progress-text" id="progress-text">Preparing...</div>
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="progress-bar"></div>
+            </div>
+            <div class="progress-log" id="progress-log"></div>
+          </div>
+        </div>
+
+        <!-- ─── Step 4: Summary ─── -->
+        <div class="step" id="step-summary">
+          <div class="card">
+            <div class="card-header">
+              <h3 class="card-title">Import Complete</h3>
+            </div>
+            <div class="summary-cards" id="summary-cards"></div>
+            <div style="margin-top:24px;display:flex;gap:12px;">
+              <a href="accounts.html" class="btn btn-primary">View Accounts</a>
+              <a href="contacts.html" class="btn">View Contacts</a>
+              <button class="btn" onclick="resetImport()">Import Another</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    // ─── Field Mapping ───
+
+    const ACCOUNT_FIELDS = {
+      'Company':                    { field: 'name' },
+      'Current?':                   { field: 'current' },
+      'Notes':                      { field: 'notes' },
+      'Billing Email (if diff)':    { field: 'billing_email' },
+      'Postal':                     { field: 'postal', bool: true },
+      'Non-Perm (no contract)':     { field: 'non_perm', bool: true },
+      'Notice Period On a Deal':    { field: 'notice_period' },
+      'Deposit':                    { field: 'deposit' },
+      'Spacebring Setup':           { field: 'spacebring_setup', bool: true },
+      'Company Number':             { field: 'company_number' },
+      'VAT Number':                 { field: 'vat_number' },
+      'Registered Address':         { field: 'registered_address' }
+    };
+
+    const CONTACT_FIELDS = {
+      'Name':           { field: 'full_name' },
+      'Contact Email':  { field: 'email' }
+    };
+
+    const COMPANY_COL = 'Company';
+    const NAME_COL = 'Name';
+
+    // ─── State ───
+
+    let csvHeaders = [];
+    let parsedRows = [];
+    let uniqueAccounts = [];
+    let contactRows = [];
+
+    // ─── CSV Parser ───
+
+    function parseCSV(text) {
+      const rows = [];
+      let current = '';
+      let inQuotes = false;
+      let row = [];
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (ch === '"' && next === '"') { current += '"'; i++; }
+          else if (ch === '"') { inQuotes = false; }
+          else { current += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ',') { row.push(current.trim()); current = ''; }
+          else if (ch === '\n' || (ch === '\r' && next === '\n')) {
+            row.push(current.trim());
+            if (ch === '\r') i++;
+            if (row.length > 1 || row[0] !== '') rows.push(row);
+            row = []; current = '';
+          } else { current += ch; }
+        }
+      }
+      if (current || row.length) {
+        row.push(current.trim());
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+      }
+
+      csvHeaders = rows.shift() || [];
+      parsedRows = rows.map(function(r) {
+        var obj = {};
+        csvHeaders.forEach(function(h, i) { obj[h] = (r[i] || '').trim(); });
+        return obj;
+      });
+    }
+
+    // ─── Name Splitting ───
+
+    function splitName(fullName) {
+      if (!fullName) return { first_name: '', last_name: '' };
+      var parts = fullName.trim().split(/\s+/);
+      if (parts.length === 1) return { first_name: parts[0], last_name: '' };
+      return { first_name: parts[0], last_name: parts.slice(1).join(' ') };
+    }
+
+    // ─── Boolean Normalisation ───
+
+    function toBool(val) {
+      if (!val) return 'FALSE';
+      var v = val.toString().toLowerCase().trim();
+      return (v === 'true' || v === 'yes' || v === 'y' || v === '1' || v === 'x') ? 'TRUE' : 'FALSE';
+    }
+
+    // ─── Extract Unique Accounts + Contacts ───
+
+    function processCSV() {
+      var accountMap = new Map();
+
+      parsedRows.forEach(function(row) {
+        var companyName = (row[COMPANY_COL] || '').trim();
+        if (!companyName) return;
+
+        var key = companyName.toLowerCase();
+
+        if (!accountMap.has(key)) {
+          var acct = { name: companyName };
+          for (var csvCol in ACCOUNT_FIELDS) {
+            if (csvCol === COMPANY_COL) continue;
+            var mapping = ACCOUNT_FIELDS[csvCol];
+            var val = row[csvCol] || '';
+            acct[mapping.field] = mapping.bool ? toBool(val) : val;
+          }
+          accountMap.set(key, acct);
+        }
+      });
+
+      uniqueAccounts = Array.from(accountMap.values());
+
+      contactRows = [];
+      parsedRows.forEach(function(row) {
+        var name = (row[NAME_COL] || '').trim();
+        var email = (row['Contact Email'] || '').trim();
+        var company = (row[COMPANY_COL] || '').trim();
+        if (!name && !email) return;
+
+        // Group / Sub TRUE = sub-contact → primary FALSE; blank/FALSE = main contact → primary TRUE
+        var groupSub = (row['Group / Sub'] || '').toString().toLowerCase().trim();
+        var isSub = (groupSub === 'true' || groupSub === 'yes' || groupSub === 'y' || groupSub === '1' || groupSub === 'x');
+        var primary = isSub ? 'FALSE' : 'TRUE';
+
+        // Current? from account row — falsy means contact is not current
+        var currentRaw = (row['Current?'] || '').toString().toLowerCase().trim();
+        var isCurrent = (currentRaw === 'true' || currentRaw === 'yes' || currentRaw === 'y' || currentRaw === '1' || currentRaw === 'x');
+        var current = isCurrent ? 'TRUE' : 'FALSE';
+
+        contactRows.push({ full_name: name, email: email, company: company, primary: primary, current: current });
+      });
+    }
+
+    // ─── File Handling ───
+
+    function handleFile(file) {
+      if (!file || !file.name.endsWith('.csv')) {
+        showToast('Please select a CSV file', 'error');
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        parseCSV(e.target.result);
+        if (parsedRows.length === 0) {
+          showToast('CSV appears empty', 'error');
+          return;
+        }
+        processCSV();
+        showPreview();
+      };
+      reader.readAsText(file);
+
+      document.getElementById('dropArea').classList.add('has-file');
+      document.getElementById('dropLabel').textContent = file.name;
+    }
+
+    // ─── Preview ───
+
+    function showPreview() {
+      showStep('step-preview');
+
+      // Stats
+      var statsEl = document.getElementById('import-stats');
+      statsEl.textContent = '';
+      var stats = [
+        { val: parsedRows.length, lbl: 'CSV Rows' },
+        { val: uniqueAccounts.length, lbl: 'Unique Accounts' },
+        { val: contactRows.length, lbl: 'Contacts' }
+      ];
+      stats.forEach(function(s) {
+        var div = document.createElement('div');
+        div.className = 'import-stat';
+        var valDiv = document.createElement('div');
+        valDiv.className = 'val';
+        valDiv.textContent = s.val;
+        var lblDiv = document.createElement('div');
+        lblDiv.className = 'lbl';
+        lblDiv.textContent = s.lbl;
+        div.appendChild(valDiv);
+        div.appendChild(lblDiv);
+        statsEl.appendChild(div);
+      });
+
+      // Accounts preview (first 10)
+      buildPreviewTable('preview-accounts',
+        ['Name', 'Current?', 'Postal', 'Non-Perm', 'Deposit', 'Company No.'],
+        uniqueAccounts.slice(0, 10).map(function(a) {
+          return [a.name, a.current, a.postal, a.non_perm, a.deposit, a.company_number];
+        }),
+        uniqueAccounts.length
+      );
+
+      // Contacts preview (first 10)
+      buildPreviewTable('preview-contacts',
+        ['Name', 'Email', 'Account', 'Primary', 'Current'],
+        contactRows.slice(0, 10).map(function(c) {
+          return [c.full_name, c.email, c.company, c.primary, c.current];
+        }),
+        contactRows.length
+      );
+    }
+
+    function buildPreviewTable(containerId, headers, rows, totalCount) {
+      var container = document.getElementById(containerId);
+      container.textContent = '';
+      var table = document.createElement('table');
+      var thead = document.createElement('thead');
+      var headRow = document.createElement('tr');
+      headers.forEach(function(h) {
+        var th = document.createElement('th');
+        th.textContent = h;
+        headRow.appendChild(th);
+      });
+      thead.appendChild(headRow);
+      table.appendChild(thead);
+
+      var tbody = document.createElement('tbody');
+      rows.forEach(function(row) {
+        var tr = document.createElement('tr');
+        row.forEach(function(val) {
+          var td = document.createElement('td');
+          td.textContent = val || '';
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      if (totalCount > 10) {
+        var tr = document.createElement('tr');
+        var td = document.createElement('td');
+        td.colSpan = headers.length;
+        td.style.cssText = 'text-align:center;color:var(--color-gray-400);font-style:italic;';
+        td.textContent = '... and ' + (totalCount - 10) + ' more';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+
+    // ─── Import (Batched — 50 rows per request) ───
+
+    var BATCH_SIZE = 50;
+
+    async function runImport() {
+      showStep('step-progress');
+
+      var logEl = document.getElementById('progress-log');
+      var barEl = document.getElementById('progress-bar');
+      var textEl = document.getElementById('progress-text');
+      logEl.textContent = '';
+
+      var totalBatches = Math.ceil(uniqueAccounts.length / BATCH_SIZE) + Math.ceil(contactRows.length / BATCH_SIZE);
+      var batchesDone = 0;
+      var accountsCreated = 0;
+      var contactsCreated = 0;
+      var errors = 0;
+      var accountIdMap = new Map();
+
+      function log(msg, type) {
+        var ts = new Date().toLocaleTimeString('en-GB');
+        var span = document.createElement('span');
+        span.className = 'log-' + (type || 'success');
+        span.textContent = '[' + ts + '] ' + msg;
+        logEl.appendChild(span);
+        logEl.appendChild(document.createElement('br'));
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function updateProgress(label) {
+        var pct = Math.round((batchesDone / totalBatches) * 100);
+        barEl.style.width = pct + '%';
+        textEl.textContent = label + ' (' + pct + '%)';
+      }
+
+      // ─── Pass 1: Create Accounts in batches ───
+      log('Starting account import (' + uniqueAccounts.length + ' accounts in batches of ' + BATCH_SIZE + ')...', 'info');
+
+      // Prepare all account records and build the ID map first
+      var accountRecords = uniqueAccounts.map(function(acct) {
+        var id = generateId('acc');
+        accountIdMap.set(acct.name.toLowerCase(), id);
+        return {
+          account_id: id,
+          name: acct.name,
+          current: acct.current || '',
+          notes: acct.notes || '',
+          billing_email: acct.billing_email || '',
+          postal: acct.postal || 'FALSE',
+          non_perm: acct.non_perm || 'FALSE',
+          notice_period: acct.notice_period || '',
+          deposit: acct.deposit || '',
+          spacebring_setup: acct.spacebring_setup || 'FALSE',
+          company_number: acct.company_number || '',
+          vat_number: acct.vat_number || '',
+          registered_address: acct.registered_address || '',
+          is_deleted: 'FALSE',
+          created_by: CONFIG.CURRENT_USER,
+          created_at: nowISO(),
+          modified_by: CONFIG.CURRENT_USER,
+          modified_at: nowISO()
+        };
+      });
+
+      for (var ai = 0; ai < accountRecords.length; ai += BATCH_SIZE) {
+        var batch = accountRecords.slice(ai, ai + BATCH_SIZE);
+        try {
+          await SheetsAPI.batchAppend(CONFIG.SHEETS.ACCOUNTS, batch);
+          accountsCreated += batch.length;
+          log('Accounts batch: ' + batch.length + ' records (rows ' + (ai + 1) + '-' + (ai + batch.length) + ')', 'success');
+        } catch (e) {
+          errors += batch.length;
+          log('FAILED accounts batch (rows ' + (ai + 1) + '-' + (ai + batch.length) + '): ' + e.message, 'error');
+        }
+        batchesDone++;
+        updateProgress('Creating accounts');
+      }
+
+      log('Accounts done. Starting contacts (' + contactRows.length + ')...', 'info');
+
+      // ─── Pass 2: Create Contacts in batches ───
+      var contactRecords = contactRows.map(function(con) {
+        var names = splitName(con.full_name);
+        var accountId = accountIdMap.get((con.company || '').toLowerCase()) || '';
+        return {
+          contact_id: generateId('con'),
+          account_id: accountId,
+          first_name: names.first_name,
+          last_name: names.last_name,
+          full_name: con.full_name,
+          email: con.email,
+          primary: con.primary,
+          current: con.current,
+          is_deleted: 'FALSE',
+          created_by: CONFIG.CURRENT_USER,
+          created_at: nowISO(),
+          modified_by: CONFIG.CURRENT_USER,
+          modified_at: nowISO()
+        };
+      });
+
+      for (var ci = 0; ci < contactRecords.length; ci += BATCH_SIZE) {
+        var conBatch = contactRecords.slice(ci, ci + BATCH_SIZE);
+        try {
+          await SheetsAPI.batchAppend(CONFIG.SHEETS.CONTACTS, conBatch);
+          contactsCreated += conBatch.length;
+          log('Contacts batch: ' + conBatch.length + ' records (rows ' + (ci + 1) + '-' + (ci + conBatch.length) + ')', 'success');
+        } catch (e) {
+          errors += conBatch.length;
+          log('FAILED contacts batch (rows ' + (ci + 1) + '-' + (ci + conBatch.length) + '): ' + e.message, 'error');
+        }
+        batchesDone++;
+        updateProgress('Creating contacts');
+      }
+
+      log('Import complete!', 'info');
+      showSummary(accountsCreated, contactsCreated, errors);
+    }
+
+    // ─── Summary ───
+
+    function showSummary(accounts, contacts, errors) {
+      showStep('step-summary');
+      var el = document.getElementById('summary-cards');
+      el.textContent = '';
+
+      var cards = [
+        { val: accounts, lbl: 'Accounts Created' },
+        { val: contacts, lbl: 'Contacts Created' }
+      ];
+      if (errors > 0) cards.push({ val: errors, lbl: 'Errors', cls: 'err' });
+
+      cards.forEach(function(c) {
+        var div = document.createElement('div');
+        div.className = 'summary-card' + (c.cls ? ' ' + c.cls : '');
+        var valDiv = document.createElement('div');
+        valDiv.className = 'val';
+        valDiv.textContent = c.val;
+        var lblDiv = document.createElement('div');
+        lblDiv.className = 'lbl';
+        lblDiv.textContent = c.lbl;
+        div.appendChild(valDiv);
+        div.appendChild(lblDiv);
+        el.appendChild(div);
+      });
+    }
+
+    // ─── Navigation ───
+
+    function showStep(id) {
+      document.querySelectorAll('.step').forEach(function(s) { s.classList.remove('active'); });
+      document.getElementById(id).classList.add('active');
+    }
+
+    function resetImport() {
+      parsedRows = [];
+      uniqueAccounts = [];
+      contactRows = [];
+      document.getElementById('dropArea').classList.remove('has-file');
+      var label = document.getElementById('dropLabel');
+      label.textContent = '';
+      var strong = document.createElement('strong');
+      strong.textContent = 'Click to select';
+      label.appendChild(strong);
+      label.appendChild(document.createTextNode(' or drag & drop your CSV file'));
+      document.getElementById('csvFileInput').value = '';
+      showStep('step-upload');
+    }
+
+    // ─── Drop Zone Events ───
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var dropArea = document.getElementById('dropArea');
+      var fileInput = document.getElementById('csvFileInput');
+
+      dropArea.addEventListener('click', function() { fileInput.click(); });
+
+      dropArea.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropArea.classList.add('drag-over');
+      });
+
+      dropArea.addEventListener('dragleave', function() {
+        dropArea.classList.remove('drag-over');
+      });
+
+      dropArea.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropArea.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+      });
+
+      fileInput.addEventListener('change', function() {
+        if (fileInput.files.length) handleFile(fileInput.files[0]);
+      });
+    });
+
+    // ─── Init ───
+    (async function() {
+      await initApp();
+    })();
+  </script>
+</body>
+</html>

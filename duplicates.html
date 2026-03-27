@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Duplicate Accounts — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .dup-group {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius-lg);
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .dup-group-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: var(--color-gray-100);
+      border-bottom: 1px solid var(--color-gray-200);
+      cursor: pointer;
+    }
+    .dup-group-header:hover {
+      background: var(--color-gray-200);
+    }
+    .dup-group-title {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-black);
+    }
+    .dup-group-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .dup-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 3px;
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .dup-badge-high { background: #fee2e2; color: #991b1b; }
+    .dup-badge-medium { background: #fef3c7; color: #92400e; }
+    .dup-badge-low { background: #e0f2fe; color: #0369a1; }
+    .dup-score {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--color-gray-500);
+    }
+    .dup-group-body {
+      padding: 0;
+    }
+    .dup-group-body table {
+      font-size: 13px;
+    }
+    .dup-group-body td {
+      padding: 10px 20px;
+    }
+    .dup-group-body tr {
+      cursor: pointer;
+    }
+    .dup-group-body tr:hover {
+      background: var(--color-surface-alt);
+    }
+    .dup-contacts-count {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--color-gray-400);
+    }
+    .dup-normalised {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 11px;
+      color: var(--color-gray-400);
+    }
+    .threshold-control {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      color: var(--color-gray-500);
+    }
+    .threshold-control input[type="range"] {
+      width: 160px;
+    }
+    .threshold-val {
+      font-weight: 600;
+      color: var(--color-black);
+      min-width: 36px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="index.html">Dashboard</a> / Duplicate Accounts</div>
+      <div class="page-header">
+        <h1 class="page-title">Duplicate Accounts</h1>
+      </div>
+
+      <div class="toolbar">
+        <div class="threshold-control">
+          <label>Similarity threshold:</label>
+          <input type="range" id="threshold" min="30" max="95" value="60">
+          <span class="threshold-val" id="threshold-val">60%</span>
+        </div>
+        <span id="record-count" style="font-family:var(--font-ui);font-size:12px;color:var(--color-gray-400);margin-left:auto;"></span>
+      </div>
+
+      <div id="results" class="loading">Loading accounts...</div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    // ─── Normalisation ───
+
+    var STRIP_SUFFIXES = [
+      'limited', 'ltd', 'llc', 'inc', 'incorporated', 'corp', 'corporation',
+      'plc', 'llp', 'lp', 'co', 'company',
+      'technologies', 'technology', 'tech',
+      'solutions', 'services', 'consulting', 'consultants', 'consultancy',
+      'group', 'holdings', 'partners', 'associates',
+      'international', 'intl', 'global',
+      'uk', 'the'
+    ];
+
+    function normalise(name) {
+      if (!name) return '';
+      var s = name.toLowerCase();
+      // Remove common punctuation and extra whitespace
+      s = s.replace(/[.,\-_&'"()]/g, ' ').replace(/\s+/g, ' ').trim();
+      // Strip suffixes (repeatedly, in case of "Tech Ltd")
+      var changed = true;
+      while (changed) {
+        changed = false;
+        for (var i = 0; i < STRIP_SUFFIXES.length; i++) {
+          var suffix = STRIP_SUFFIXES[i];
+          // Remove as trailing word
+          var re = new RegExp('\\b' + suffix + '\\b', 'g');
+          var before = s;
+          s = s.replace(re, '').replace(/\s+/g, ' ').trim();
+          if (s !== before) changed = true;
+        }
+      }
+      // Remove all spaces for final comparison
+      return s.replace(/\s+/g, '');
+    }
+
+    // ─── Trigram Similarity ───
+
+    function trigrams(str) {
+      if (str.length < 3) return new Set([str]);
+      var set = new Set();
+      for (var i = 0; i <= str.length - 3; i++) {
+        set.add(str.substring(i, i + 3));
+      }
+      return set;
+    }
+
+    function trigramSimilarity(a, b) {
+      if (a === b) return 1;
+      if (!a || !b) return 0;
+      var tA = trigrams(a);
+      var tB = trigrams(b);
+      var intersection = 0;
+      tA.forEach(function(t) { if (tB.has(t)) intersection++; });
+      var union = tA.size + tB.size - intersection;
+      return union === 0 ? 0 : intersection / union;
+    }
+
+    // ─── Find Duplicate Groups ───
+
+    function findDuplicates(accounts, contacts, threshold) {
+      // Build contact counts per account
+      var contactCounts = {};
+      contacts.forEach(function(c) {
+        if (c.account_id) {
+          contactCounts[c.account_id] = (contactCounts[c.account_id] || 0) + 1;
+        }
+      });
+
+      // Normalise all account names
+      var items = accounts.map(function(a) {
+        return {
+          account: a,
+          norm: normalise(a.name),
+          contacts: contactCounts[a.account_id] || 0
+        };
+      });
+
+      // Phase 1: Exact normalised match
+      var normGroups = {};
+      items.forEach(function(item) {
+        if (!item.norm) return;
+        if (!normGroups[item.norm]) normGroups[item.norm] = [];
+        normGroups[item.norm].push(item);
+      });
+
+      // Collect exact-match groups (2+ accounts with same normalised name)
+      var groups = [];
+      var grouped = new Set();
+      for (var key in normGroups) {
+        if (normGroups[key].length >= 2) {
+          groups.push({
+            similarity: 1.0,
+            confidence: 'high',
+            items: normGroups[key]
+          });
+          normGroups[key].forEach(function(item) { grouped.add(item.account.account_id); });
+        }
+      }
+
+      // Phase 2: Trigram fuzzy match on remaining
+      var remaining = items.filter(function(item) { return !grouped.has(item.account.account_id) && item.norm; });
+      var fuzzyGrouped = new Set();
+
+      for (var i = 0; i < remaining.length; i++) {
+        if (fuzzyGrouped.has(i)) continue;
+        var matches = [remaining[i]];
+        var bestScore = 0;
+
+        for (var j = i + 1; j < remaining.length; j++) {
+          if (fuzzyGrouped.has(j)) continue;
+          var sim = trigramSimilarity(remaining[i].norm, remaining[j].norm);
+          if (sim >= threshold / 100) {
+            matches.push(remaining[j]);
+            if (sim > bestScore) bestScore = sim;
+            fuzzyGrouped.add(j);
+          }
+        }
+
+        if (matches.length >= 2) {
+          fuzzyGrouped.add(i);
+          var conf = bestScore >= 0.8 ? 'high' : bestScore >= 0.6 ? 'medium' : 'low';
+          groups.push({
+            similarity: bestScore,
+            confidence: conf,
+            items: matches
+          });
+        }
+      }
+
+      // Sort groups: high confidence first, then by similarity desc
+      groups.sort(function(a, b) {
+        var order = { high: 0, medium: 1, low: 2 };
+        if (order[a.confidence] !== order[b.confidence]) return order[a.confidence] - order[b.confidence];
+        return b.similarity - a.similarity;
+      });
+
+      return groups;
+    }
+
+    // ─── Render ───
+
+    function renderResults(groups) {
+      var container = document.getElementById('results');
+      var countEl = document.getElementById('record-count');
+      container.textContent = '';
+      container.className = '';
+
+      var totalAccounts = 0;
+      groups.forEach(function(g) { totalAccounts += g.items.length; });
+
+      if (countEl) {
+        countEl.textContent = groups.length + ' group' + (groups.length !== 1 ? 's' : '') +
+          ' (' + totalAccounts + ' accounts)';
+      }
+
+      if (groups.length === 0) {
+        var empty = document.createElement('div');
+        empty.className = 'empty-state';
+        var h3 = document.createElement('h3');
+        h3.textContent = 'No duplicates found';
+        var p = document.createElement('p');
+        p.textContent = 'Try lowering the similarity threshold.';
+        empty.appendChild(h3);
+        empty.appendChild(p);
+        container.appendChild(empty);
+        return;
+      }
+
+      groups.forEach(function(group, gi) {
+        var div = document.createElement('div');
+        div.className = 'dup-group';
+
+        // Header
+        var header = document.createElement('div');
+        header.className = 'dup-group-header';
+
+        var title = document.createElement('span');
+        title.className = 'dup-group-title';
+        var names = group.items.map(function(it) { return it.account.name; });
+        title.textContent = names.join('  /  ');
+
+        var meta = document.createElement('div');
+        meta.className = 'dup-group-meta';
+
+        var badge = document.createElement('span');
+        badge.className = 'dup-badge dup-badge-' + group.confidence;
+        badge.textContent = group.confidence;
+        meta.appendChild(badge);
+
+        var score = document.createElement('span');
+        score.className = 'dup-score';
+        score.textContent = Math.round(group.similarity * 100) + '% match';
+        meta.appendChild(score);
+
+        header.appendChild(title);
+        header.appendChild(meta);
+        div.appendChild(header);
+
+        // Body table
+        var body = document.createElement('div');
+        body.className = 'dup-group-body';
+        var table = document.createElement('table');
+        table.style.width = '100%';
+        table.style.borderCollapse = 'collapse';
+
+        group.items.forEach(function(item) {
+          var tr = document.createElement('tr');
+          tr.onclick = function() { window.location.href = 'account-detail.html?id=' + encodeURIComponent(item.account.account_id); };
+
+          var tdName = document.createElement('td');
+          tdName.textContent = item.account.name;
+          tdName.style.fontWeight = '500';
+          tr.appendChild(tdName);
+
+          var tdNorm = document.createElement('td');
+          tdNorm.className = 'dup-normalised';
+          tdNorm.textContent = item.norm;
+          tr.appendChild(tdNorm);
+
+          var tdType = document.createElement('td');
+          tdType.textContent = item.account.type || '';
+          tr.appendChild(tdType);
+
+          var tdContacts = document.createElement('td');
+          tdContacts.className = 'dup-contacts-count';
+          tdContacts.textContent = item.contacts + ' contact' + (item.contacts !== 1 ? 's' : '');
+          tr.appendChild(tdContacts);
+
+          var tdCurrent = document.createElement('td');
+          var curVal = (item.account.current || '').toString().toLowerCase().trim();
+          var isCur = curVal === 'true' || curVal === 'yes' || curVal === 'y' || curVal === '1' || curVal === 'x';
+          tdCurrent.textContent = isCur ? 'Active' : 'Inactive';
+          if (!isCur) {
+            tr.style.opacity = '0.5';
+            tr.style.background = 'var(--color-gray-100)';
+          }
+          tr.appendChild(tdCurrent);
+
+          table.appendChild(tr);
+        });
+
+        body.appendChild(table);
+        div.appendChild(body);
+        container.appendChild(div);
+      });
+    }
+
+    // ─── State & Init ───
+
+    var _accounts = [];
+    var _contacts = [];
+
+    async function loadData() {
+      var data = await SheetsAPI.batchGet([CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.CONTACTS]);
+      _accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      _contacts = (data.Contacts || []).filter(function(c) { return c.is_deleted !== 'TRUE'; });
+      runAnalysis();
+    }
+
+    function runAnalysis() {
+      var threshold = parseInt(document.getElementById('threshold').value, 10);
+      document.getElementById('threshold-val').textContent = threshold + '%';
+      var groups = findDuplicates(_accounts, _contacts, threshold);
+      renderResults(groups);
+    }
+
+    document.getElementById('threshold').addEventListener('input', runAnalysis);
+
+    (async function() {
+      await initApp();
+      await loadData();
+    })();
+  </script>
+</body>
+</html>

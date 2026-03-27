@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="page-header">
+        <h1 class="page-title">Settings</h1>
+      </div>
+
+      <div class="card" style="max-width:600px;">
+        <div class="section-title">Data Utilities</div>
+        <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+          One-time utilities for data maintenance. Use with care.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border:1px solid var(--color-gray-200);border-radius:var(--radius);">
+            <div>
+              <div style="font-family:var(--font-ui);font-size:13px;font-weight:600;color:var(--color-black);">Backfill Area IDs</div>
+              <div style="font-family:var(--font-body);font-size:12px;color:var(--color-gray-400);">Generate unique area_id for any Area rows missing one</div>
+            </div>
+            <button class="btn btn-sm" onclick="runBackfillAreaIds()">Run</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/areas.js"></script>
+  <script>
+    async function runBackfillAreaIds() {
+      await CONFIG.initSecrets();
+      await backfillAreaIds();
+    }
+
+    (async function() {
+      await initApp();
+    })();
+  </script>
+</body>
+</html>
