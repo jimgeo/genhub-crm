@@ -354,13 +354,23 @@ async function loadLinkedAgreements(accountId) {
 
   agreements.sort(function(a, b) { return b._sortVal - a._sortVal; });
 
+  function fmtAmt(v) { return v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
   agreements.forEach(function(a) {
+    var records = billingByAgreement[a.agreement_id] || [];
+    var agrTotal = 0;
+    records.forEach(function(b) { agrTotal += parseFloat(b.amount) || 0; });
+
     var tr = document.createElement('tr');
     [a._to, a._from, a.type || '', a.zone || '', a.area || '', a.notes || '', a.payment_notes || ''].forEach(function(val) {
       var td = document.createElement('td');
       td.textContent = val;
       tr.appendChild(td);
     });
+    var tdTotal = document.createElement('td');
+    tdTotal.className = 'amount';
+    tdTotal.textContent = fmtAmt(agrTotal);
+    tr.appendChild(tdTotal);
     agrTbody.appendChild(tr);
   });
 
@@ -391,7 +401,6 @@ async function loadLinkedAgreements(accountId) {
     return (monthOrder[b.month] || 0) - (monthOrder[a.month] || 0);
   });
 
-  function fmtAmt(v) { return v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   var SHADED_BG = 'var(--color-gray-100)';
   var YEAR_ROW_CSS = 'font-weight:600;background:var(--color-gray-200);';
   var TOTAL_ROW_CSS = 'font-weight:700;border-top:2px solid var(--color-gray-400);';
