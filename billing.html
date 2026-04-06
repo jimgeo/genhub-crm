@@ -42,6 +42,25 @@
     .billing-table td.cat-additional { background: #e8f4fd; }
 
     .billing-table tr:hover td.sticky-col { z-index: 3; background: var(--color-gray-50); }
+
+    .billing-table td.has-note { position: relative; }
+    .billing-table td.has-note::after {
+      content: ''; position: absolute; top: 3px; right: 3px;
+      width: 6px; height: 6px; border-radius: 50%; background: var(--color-info);
+    }
+    .note-tip {
+      display: none; position: absolute; bottom: calc(100% + 4px); right: 0;
+      background: #1a1a2e; color: #fff; font-family: var(--font-ui); font-size: 11px;
+      font-style: normal; white-space: normal; max-width: 200px;
+      padding: 6px 10px; border-radius: var(--radius); z-index: 10;
+      pointer-events: none; line-height: 1.4;
+    }
+    .billing-table td.has-note:hover .note-tip { display: block; }
+
+    .zone-notes-btn {
+      font-size: 9px; font-weight: 400; opacity: 0.85; margin-left: 12px;
+      cursor: pointer; text-decoration: underline; text-transform: none; letter-spacing: 0;
+    }
   </style>
 </head>
 <body>
@@ -61,9 +80,6 @@
         </label>
         <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
           <input type="checkbox" id="hide-vacant"> Hide vacant
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
-          <input type="checkbox" id="show-notes"> Show notes
         </label>
         <span id="record-count" style="font-family:var(--font-ui);font-size:11px;color:var(--color-gray-400);margin-left:auto;"></span>
       </div>
@@ -89,7 +105,6 @@
     var allCols = [];
     var showOld = false;
     var hideVacant = false;
-    var showNotes = false;
 
     async function loadBilling() {
       var data = await SheetsAPI.batchGet([
@@ -277,6 +292,24 @@
           toggle.textContent = '\u25BC';
           ztd.appendChild(toggle);
           ztd.appendChild(document.createTextNode(' ' + zoneName));
+
+          var notesBtn = document.createElement('span');
+          notesBtn.className = 'zone-notes-btn';
+          notesBtn.textContent = 'Show notes';
+          notesBtn.setAttribute('data-zone-notes', zoneName);
+          notesBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var showing = notesBtn.textContent === 'Hide notes';
+            notesBtn.textContent = showing ? 'Show notes' : 'Hide notes';
+            var next = ztr.nextElementSibling;
+            while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
+              if (next.classList.contains('notes-row')) {
+                next.style.display = showing ? 'none' : '';
+              }
+              next = next.nextElementSibling;
+            }
+          });
+          ztd.appendChild(notesBtn);
           ztr.appendChild(ztd);
 
           // One cell per month column with zone total
@@ -294,12 +327,14 @@
           ztr.addEventListener('click', function() {
             ztr.classList.toggle('collapsed');
             var hide = ztr.classList.contains('collapsed');
+            var btn = ztr.querySelector('.zone-notes-btn');
+            var notesVisible = btn && btn.textContent === 'Hide notes';
             var next = ztr.nextElementSibling;
             while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
               if (hide) {
                 next.style.display = 'none';
               } else if (next.classList.contains('notes-row')) {
-                next.style.display = showNotes ? '' : 'none';
+                next.style.display = notesVisible ? '' : 'none';
               } else {
                 next.style.display = '';
               }
@@ -341,17 +376,24 @@
             td.classList.add('has-value');
             colTotals[col] += val;
           }
-          if (row.notes[col]) hasNotes = true;
+          if (row.notes[col]) {
+            hasNotes = true;
+            td.classList.add('has-note');
+            var tip = document.createElement('span');
+            tip.className = 'note-tip';
+            tip.textContent = row.notes[col];
+            td.appendChild(tip);
+          }
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
 
-        // Notes row (hidden unless showNotes is on and row has notes)
+        // Notes row (hidden by default, toggled per-zone via "Show notes" button)
         if (hasNotes) {
           var notesTr = document.createElement('tr');
           notesTr.className = 'notes-row';
           notesTr.setAttribute('data-zone', row.zone || 'No Zone');
-          if (!showNotes) notesTr.style.display = 'none';
+          notesTr.style.display = 'none';
           var noteLabel = document.createElement('td');
           noteLabel.colSpan = 3;
           noteLabel.className = 'sticky-col col-account';
@@ -403,10 +445,6 @@
       });
       document.getElementById('hide-vacant').addEventListener('change', function() {
         hideVacant = this.checked;
-        renderTable();
-      });
-      document.getElementById('show-notes').addEventListener('change', function() {
-        showNotes = this.checked;
         renderTable();
       });
       await loadBilling();
