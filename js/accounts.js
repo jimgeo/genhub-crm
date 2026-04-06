@@ -356,7 +356,7 @@ async function loadLinkedAgreements(accountId) {
 
   agreements.forEach(function(a) {
     var tr = document.createElement('tr');
-    [a.type || '', a.zone || '', a.area || '', a._from, a._to, a.notes || '', a.payment_notes || ''].forEach(function(val) {
+    [a._to, a._from, a.type || '', a.zone || '', a.area || '', a.notes || '', a.payment_notes || ''].forEach(function(val) {
       var td = document.createElement('td');
       td.textContent = val;
       tr.appendChild(td);
