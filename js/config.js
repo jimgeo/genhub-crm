@@ -10,7 +10,8 @@ const CONFIG = {
     LOOKUPS: 'Lookup',
     AREAS: 'Area',
     ACCOUNT_AREAS: 'Account_Areas',
-    BILLING: 'Billing'
+    BILLING: 'Billing',
+    BILLING_AGREEMENTS: 'Billing_Agreement'
   },
 
   BASE_URL: 'https://sheets.googleapis.com/v4/spreadsheets',
