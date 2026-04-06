@@ -141,7 +141,7 @@ async function loadAccountDetail() {
 
   // Load linked contacts, areas, agreements, and payments
   await loadLinkedContacts(id);
-  await loadLinkedAreas(id);
+  try { await loadLinkedAreas(id); } catch (e) { console.warn('[areas] Failed to load:', e.message); }
   await loadLinkedAgreements(id);
 }
 
