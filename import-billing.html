@@ -106,7 +106,7 @@
               <h3 class="card-title">Upload Excel File</h3>
             </div>
             <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
-              Upload the Monthly Expected Forecast .xlsx file. Each row (account + area + zone) is unpivoted into one Billing record per month with a non-zero amount.
+              Upload the Monthly Expected Forecast .xlsx file. Each row creates a Billing Agreement record, and each non-blank monthly cell creates a linked Billing record. Columns are matched by header name. Additional category rows are imported first.
             </p>
             <div class="file-upload-area" id="dropArea">
               <div class="file-icon">&#128200;</div>
@@ -116,16 +116,19 @@
 
             <div style="margin-top:24px;">
               <h4 class="card-title" style="margin-bottom:12px;">Expected Format</h4>
+              <p style="font-size:12px;color:var(--color-gray-500);margin-bottom:8px;">Columns are matched by header name, not position. The following headers are expected:</p>
               <table class="mapping-table">
-                <thead><tr><th>Column</th><th>Maps To</th><th>Notes</th></tr></thead>
+                <thead><tr><th>Column Header</th><th>Maps To</th><th>Notes</th></tr></thead>
                 <tbody>
-                  <tr><td>A — Account</td><td><span class="tag tag-billing">Billing</span> account_id</td><td>Matched to Accounts by name before brackets</td></tr>
-                  <tr><td>B — Type</td><td><span class="tag tag-billing">Billing</span> type</td><td><code>old</code> = cancelled, <code>add</code> = manual, <code>Upcoming</code>, <code>Notice given</code>, blank = active</td></tr>
-                  <tr><td>C — Legacy desk names</td><td><span class="tag tag-ignore">Ignore</span></td><td></td></tr>
-                  <tr><td>D — Zone</td><td><span class="tag tag-billing">Billing</span> area_id</td><td rowspan="2">Zone + Area matched to Area sheet</td></tr>
-                  <tr><td>E — Area</td><td><span class="tag tag-billing">Billing</span> area_id</td></tr>
-                  <tr><td>F — Notes</td><td><span class="tag tag-billing">Billing</span> notes</td><td></td></tr>
-                  <tr><td>G onwards — Monthly £</td><td><span class="tag tag-billing">Billing</span> amount</td><td>Row 1 = month (JAN-DEC), Row 2 = year. One billing row per non-zero value.</td></tr>
+                  <tr><td>Account</td><td><span class="tag tag-billing">Agreement</span> account_id</td><td>Matched to Accounts by name before first bracket. Skipped for Additional category.</td></tr>
+                  <tr><td>Type</td><td><span class="tag tag-billing">Agreement</span> type</td><td><code>old</code> = cancelled, <code>Upcoming</code>, <code>Notice given</code>, blank = active</td></tr>
+                  <tr><td>Legacy desk names</td><td><span class="tag tag-ignore">Ignore</span></td><td>Ignored during import</td></tr>
+                  <tr><td>Category</td><td><span class="tag tag-billing">Agreement</span> category</td><td><code>Additional</code> = skip account matching. <code>Agreement</code> = normal. <code>Title</code> / <code>Totals</code> / blank = skip row.</td></tr>
+                  <tr><td>Zone</td><td><span class="tag tag-billing">Agreement</span> zone</td><td rowspan="2">Zone + Area matched to Area sheet for area_id lookup. Rows import even if no match found.</td></tr>
+                  <tr><td>Area</td><td><span class="tag tag-billing">Agreement</span> area</td></tr>
+                  <tr><td>Notes</td><td><span class="tag tag-billing">Agreement</span> notes</td><td>Row-level notes stored on the agreement</td></tr>
+                  <tr><td>Payment Notes</td><td><span class="tag tag-billing">Agreement</span> payment_notes</td><td>Row-level payment notes stored on the agreement</td></tr>
+                  <tr><td><em>Month columns</em> (JAN–DEC)</td><td><span class="tag tag-billing">Billing</span> amount</td><td>Row below header = year. One billing record per non-blank cell. Zero amounts create a record. Text cells create a record with the text stored in billing notes.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -135,12 +138,17 @@
               <table class="mapping-table">
                 <thead><tr><th>Rule</th><th>Logic</th></tr></thead>
                 <tbody>
-                  <tr><td>Account matching</td><td>Account name matched on text <strong>before the first bracket</strong>. E.g. "Geo.me Solutions (Jim Strong)" matches Account "Geo.me Solutions". Case-insensitive.</td></tr>
-                  <tr><td>Area matching</td><td>Zone + Area matched against Area sheet records. Both must match (case-insensitive).</td></tr>
-                  <tr><td>Title rows</td><td>Rows where Type = "Title" are section headers — skipped entirely.</td></tr>
-                  <tr><td>Zero/blank amounts</td><td>Only non-zero amounts create billing records. Blank and zero cells are skipped.</td></tr>
-                  <tr><td>Duplicates</td><td>If a billing record already exists for the same account + area + month + year, it is skipped (not overwritten).</td></tr>
-                  <tr><td>No deletes</td><td>Billing records are never deleted. Type field tracks lifecycle (old, add, Upcoming, Notice given).</td></tr>
+                  <tr><td>Column matching</td><td>Columns are matched by header name (row 1 of the spreadsheet), not by position. Month columns are identified by matching JAN–DEC.</td></tr>
+                  <tr><td>Category handling</td><td><strong>Additional</strong> — imports without account matching (account_id left blank). <strong>Agreement</strong> — normal account matching. <strong>Title / Totals / blank</strong> — row skipped entirely.</td></tr>
+                  <tr><td>Account matching</td><td>Account name matched on text <strong>before the first bracket</strong>. E.g. "Geo.me Solutions (Jim Strong)" matches "Geo.me Solutions". Case-insensitive. Only for Agreement category rows.</td></tr>
+                  <tr><td>Area matching</td><td>Zone + Area matched against Area sheet. If no match found, row still imports but area_id is left blank (can be reconciled later).</td></tr>
+                  <tr><td>Zero amounts</td><td>Cells containing 0 <strong>do</strong> create a billing record with amount = 0.</td></tr>
+                  <tr><td>Blank cells</td><td>Completely blank/empty cells do <strong>not</strong> create a billing record.</td></tr>
+                  <tr><td>Text cells</td><td>If a monthly cell contains text instead of a number, a billing record is created with amount = 0 and the text stored in the billing notes field.</td></tr>
+                  <tr><td>Billing Agreement</td><td>One agreement record is created per spreadsheet row, holding account, zone, area, category, type, notes, and payment notes. Billing records link to the agreement via agreement_id.</td></tr>
+                  <tr><td>Import order</td><td>Additional category rows are imported first, then Agreement category rows.</td></tr>
+                  <tr><td>Duplicates</td><td>Duplicates are <strong>allowed</strong> (not blocked). The preflight report highlights potential duplicates as a warning for review before importing.</td></tr>
+                  <tr><td>No deletes</td><td>Billing records are never deleted during import. Type field tracks lifecycle.</td></tr>
                 </tbody>
               </table>
             </div>
