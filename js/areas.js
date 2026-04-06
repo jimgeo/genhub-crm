@@ -9,7 +9,7 @@ let _showInactiveAreas = false;
 const AREA_COLUMNS = [
   { key: 'zone', label: 'Zone' },
   { key: 'area', label: 'Area' },
-  { key: 'single_multi', label: 'Type' },
+  { key: 'member_single_multi', label: 'Type' },
   { key: 'category', label: 'Category' },
   { key: 'description', label: 'Description' },
   { key: 'current', label: 'Current' }
@@ -31,7 +31,7 @@ function applyAreaFilters() {
     if (q) {
       return (a.zone || '').toLowerCase().includes(q) ||
         (a.area || '').toLowerCase().includes(q) ||
-        (a.single_multi || '').toLowerCase().includes(q) ||
+        (a.member_single_multi || '').toLowerCase().includes(q) ||
         (a.category || '').toLowerCase().includes(q) ||
         (a.description || '').toLowerCase().includes(q);
     }
@@ -118,7 +118,7 @@ function renderAreasTable(areas) {
     }
     tr.onclick = function() { window.location.href = 'area-detail.html?id=' + encodeURIComponent(a.area_id); };
 
-    var fields = [a.zone, a.area, a.single_multi, a.category, a.description, cur ? 'Yes' : 'No'];
+    var fields = [a.zone, a.area, a.member_single_multi, a.category, a.description, cur ? 'Yes' : 'No'];
     fields.forEach(function(val) {
       var td = document.createElement('td');
       td.textContent = val || '';
@@ -134,7 +134,7 @@ function renderAreasTable(areas) {
 var _editingArea = null;
 var _editingAreaIndex = -1;
 
-var AREA_FORM_FIELDS = ['zone', 'area', 'single_multi', 'category', 'description', 'current'];
+var AREA_FORM_FIELDS = ['zone', 'area', 'member_single_multi', 'category', 'description', 'current'];
 
 async function loadAreaDetail() {
   var id = getParam('id');
