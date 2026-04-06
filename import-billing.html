@@ -201,16 +201,17 @@
   <script src="js/layout.js"></script>
   <script>
     // ─── State ───
-    var parsedBillingRows = []; // { account, accountClean, type, zone, area, notes, month, year, amount }
-    var accountIdMap = {};      // lowercase name -> account_id
-    var areaIdMap = {};         // "zone||area" lowercase -> area_id
+    var parsedRows = [];          // { account, accountClean, type, category, zone, area, notes, paymentNotes, months: [{ month, year, amount, cellNotes }] }
+    var accountIdMap = {};        // lowercase name -> account_id
+    var areaIdMap = {};           // "zone||area" lowercase -> area_id
     var unmatchedAccounts = new Set();
     var unmatchedAreas = new Set();
-    var existingKeys = new Set(); // "accountId|areaId|month|year" for dupe detection
+    var existingAgreementKeys = new Set(); // for duplicate detection reporting
     var BATCH_SIZE = 100;
     var MAX_RETRIES = 3;
     var BATCH_DELAY_MS = 500;
-    var ADD_TYPES = ['add', 'add old'];
+    var VALID_MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    var SKIP_CATEGORIES = ['title', 'totals', ''];
 
     // ─── Account name: strip brackets ───
     function cleanAccountName(name) {
@@ -224,80 +225,117 @@
       var ws = wb.Sheets[wb.SheetNames[0]];
       var range = XLSX.utils.decode_range(ws['!ref']);
 
-      // Row 0 = month names, Row 1 = years (0-indexed)
-      var monthCols = [];
-      for (var c = 6; c <= range.e.c; c++) { // col G = index 6
-        var mCell = ws[XLSX.utils.encode_cell({ r: 0, c: c })];
-        var yCell = ws[XLSX.utils.encode_cell({ r: 1, c: c })];
-        var month = mCell ? String(mCell.v).trim().toUpperCase() : '';
-        var year = yCell ? String(Math.floor(Number(yCell.v))) : '';
-        if (month && year) {
-          monthCols.push({ c: c, month: month, year: year });
+      // Row 0 = headers (column names + month names)
+      // Build header map: header name (lowercase) -> column index
+      var headerMap = {};
+      for (var c = 0; c <= range.e.c; c++) {
+        var cell = ws[XLSX.utils.encode_cell({ r: 0, c: c })];
+        if (cell) {
+          headerMap[String(cell.v).trim().toLowerCase()] = c;
         }
       }
 
-      parsedBillingRows = [];
-      for (var r = 2; r <= range.e.r; r++) { // data starts row 3 = index 2
-        var acctCell = ws[XLSX.utils.encode_cell({ r: r, c: 0 })];
-        var typeCell = ws[XLSX.utils.encode_cell({ r: r, c: 1 })];
-        var zoneCell = ws[XLSX.utils.encode_cell({ r: r, c: 3 })];
-        var areaCell = ws[XLSX.utils.encode_cell({ r: r, c: 4 })];
-        var notesCell = ws[XLSX.utils.encode_cell({ r: r, c: 5 })];
+      // Find fixed columns by name
+      var colAccount = headerMap['account'];
+      var colType = headerMap['type'];
+      var colCategory = headerMap['category'];
+      var colZone = headerMap['zone'];
+      var colArea = headerMap['area'];
+      var colNotes = headerMap['notes'];
+      var colPaymentNotes = headerMap['payment notes'];
 
-        var account = acctCell ? String(acctCell.v).trim() : '';
-        var type = typeCell ? String(typeCell.v).trim() : '';
-        if (!account || type.toLowerCase() === 'title') continue;
+      // Find month columns: header matches JAN-DEC, row 1 has the year
+      var monthCols = [];
+      for (var c2 = 0; c2 <= range.e.c; c2++) {
+        var hCell = ws[XLSX.utils.encode_cell({ r: 0, c: c2 })];
+        if (!hCell) continue;
+        var hVal = String(hCell.v).trim().toUpperCase();
+        if (VALID_MONTHS.indexOf(hVal) === -1) continue;
+        var yCell = ws[XLSX.utils.encode_cell({ r: 1, c: c2 })];
+        var year = yCell ? String(Math.floor(Number(yCell.v))) : '';
+        if (!year || year === 'NaN') continue;
+        monthCols.push({ c: c2, month: hVal, year: year });
+      }
+
+      function getCellStr(r, colIdx) {
+        if (colIdx == null) return '';
+        var cl = ws[XLSX.utils.encode_cell({ r: r, c: colIdx })];
+        return cl ? String(cl.v).trim() : '';
+      }
+
+      parsedRows = [];
+      for (var r = 2; r <= range.e.r; r++) {
+        var category = getCellStr(r, colCategory).toLowerCase();
+        // Skip Title, Totals, and blank category rows
+        if (SKIP_CATEGORIES.indexOf(category) !== -1) continue;
+
+        var account = getCellStr(r, colAccount);
+        if (!account && category !== 'additional') continue;
 
         var accountClean = cleanAccountName(account);
-        var zone = zoneCell ? String(zoneCell.v).trim() : '';
-        var area = areaCell ? String(areaCell.v).trim() : '';
-        var notes = notesCell ? String(notesCell.v).trim() : '';
+        var type = getCellStr(r, colType);
+        var zone = getCellStr(r, colZone);
+        var area = getCellStr(r, colArea);
+        var notes = getCellStr(r, colNotes);
+        var paymentNotes = getCellStr(r, colPaymentNotes);
 
+        // Build monthly data for this row
+        var months = [];
         for (var mi = 0; mi < monthCols.length; mi++) {
           var mc = monthCols[mi];
-          var cell = ws[XLSX.utils.encode_cell({ r: r, c: mc.c })];
-          if (!cell) continue;
-          var rawVal = cell.v;
-          if (typeof rawVal !== 'number') continue;
-          if (rawVal === 0) continue;
-          var amount = Math.round(rawVal * 100) / 100;
+          var mCell = ws[XLSX.utils.encode_cell({ r: r, c: mc.c })];
+          if (!mCell) continue; // blank cell — no record
 
-          parsedBillingRows.push({
-            account: account,
-            accountClean: accountClean,
-            type: type,
-            zone: zone,
-            area: area,
-            notes: notes,
-            month: mc.month,
-            year: mc.year,
-            amount: Math.round(amount * 100) / 100
-          });
+          var rawVal = mCell.v;
+          var amount = 0;
+          var cellNotes = '';
+
+          if (typeof rawVal === 'number') {
+            amount = Math.round(rawVal * 100) / 100;
+          } else if (typeof rawVal === 'string' && rawVal.trim() !== '') {
+            // Text cell — create record with amount 0, text as notes
+            amount = 0;
+            cellNotes = rawVal.trim();
+          } else {
+            continue; // other non-value cell types — skip
+          }
+
+          months.push({ month: mc.month, year: mc.year, amount: amount, cellNotes: cellNotes });
         }
+
+        if (months.length === 0) continue; // no monthly data at all
+
+        parsedRows.push({
+          account: account,
+          accountClean: accountClean,
+          type: type,
+          category: category,
+          zone: zone,
+          area: area,
+          notes: notes,
+          paymentNotes: paymentNotes,
+          months: months
+        });
       }
     }
 
     // ─── Pre-flight: load CRM data and match ───
     async function runPreflight() {
       var data = await SheetsAPI.batchGet([
-        CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS, CONFIG.SHEETS.BILLING
+        CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS, CONFIG.SHEETS.BILLING_AGREEMENTS
       ]);
 
-      console.log('[preflight] batchGet keys:', Object.keys(data));
-      console.log('[preflight] Area rows:', (data.Area || []).length);
       var accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
       var areas = (data.Area || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
-      var existingBilling = data.Billing || [];
-      console.log('[preflight] Areas after filter:', areas.length);
-      if (areas.length > 0) console.log('[preflight] Sample area:', JSON.stringify(areas[0]));
+      var existingAgreements = data.Billing_Agreement || [];
 
-      // Build account lookup (lowercase name -> account_id)
+      // Build account lookup
       accountIdMap = {};
       accounts.forEach(function(a) {
         accountIdMap[a.name.toLowerCase().trim()] = a.account_id;
       });
 
-      // Build area lookup ("zone||area" lowercase -> area_id)
+      // Build area lookup
       areaIdMap = {};
       var areasWithoutId = 0;
       areas.forEach(function(a) {
@@ -311,13 +349,13 @@
       if (areasWithoutId > 0) {
         console.warn('[preflight] ' + areasWithoutId + ' areas have no area_id — run Backfill Area IDs in Settings first');
       }
-      console.log('[preflight] areaIdMap entries:', Object.keys(areaIdMap).length);
 
-      // Build existing billing keys for dupe detection
-      existingKeys = new Set();
-      existingBilling.forEach(function(b) {
-        var key = (b.account_id || '') + '|' + (b.area_id || '') + '|' + (b.month || '').toUpperCase() + '|' + (b.year || '');
-        existingKeys.add(key);
+      // Build existing agreement keys for duplicate detection (reporting only)
+      existingAgreementKeys = new Set();
+      existingAgreements.forEach(function(a) {
+        if (a.is_deleted === 'TRUE') return;
+        var key = (a.account_name || '').toLowerCase().trim() + '|' + (a.zone || '').toLowerCase().trim() + '|' + (a.area || '').toLowerCase().trim() + '|' + (a.category || '').toLowerCase().trim();
+        existingAgreementKeys.add(key);
       });
 
       // Match and flag issues
@@ -326,37 +364,37 @@
       var matchedAccounts = new Set();
       var matchedAreas = new Set();
       var dupeCount = 0;
-      var newRows = [];
+      var totalBillingRecords = 0;
 
-      parsedBillingRows.forEach(function(row) {
+      parsedRows.forEach(function(row) {
+        var isAdditional = row.category === 'additional';
         var acctKey = row.accountClean.toLowerCase().trim();
         var areaKey = row.zone.toLowerCase().trim() + '||' + row.area.toLowerCase().trim();
-        var isAddType = ADD_TYPES.indexOf(row.type.toLowerCase().trim()) !== -1;
-        var acctId = isAddType ? '' : (accountIdMap[acctKey] || '');
+        var acctId = isAdditional ? '' : (accountIdMap[acctKey] || '');
         var areaId = areaIdMap[areaKey] || '';
 
-        if (!isAddType) {
+        if (!isAdditional) {
           if (acctId) matchedAccounts.add(acctKey);
-          else unmatchedAccounts.add(row.accountClean);
+          else if (row.accountClean) unmatchedAccounts.add(row.accountClean);
         }
 
         if (areaId) matchedAreas.add(areaKey);
         else if (row.zone || row.area) unmatchedAreas.add(row.zone + ' / ' + row.area);
 
-        // Check dupe
-        var billingKey = acctId + '|' + areaId + '|' + row.month + '|' + row.year;
-        if (existingKeys.has(billingKey)) {
+        // Duplicate detection (report only)
+        var dupeKey = (row.accountClean || '').toLowerCase().trim() + '|' + row.zone.toLowerCase().trim() + '|' + row.area.toLowerCase().trim() + '|' + row.category;
+        if (existingAgreementKeys.has(dupeKey)) {
           dupeCount++;
-        } else {
-          newRows.push(row);
         }
+
+        totalBillingRecords += row.months.length;
       });
 
-      showPreflight(matchedAccounts.size, unmatchedAccounts, matchedAreas.size, unmatchedAreas, newRows.length, dupeCount);
+      showPreflight(matchedAccounts.size, unmatchedAccounts, matchedAreas.size, unmatchedAreas, parsedRows.length, totalBillingRecords, dupeCount);
     }
 
     // ─── Show preflight results ───
-    function showPreflight(matchedAccts, unmatchedAccts, matchedAreas, unmatchedAreaSet, newCount, dupeCount) {
+    function showPreflight(matchedAccts, unmatchedAccts, matchedAreas, unmatchedAreaSet, agreementCount, billingCount, dupeCount) {
       showStep('step-preflight');
       var container = document.getElementById('preflight-results');
       container.textContent = '';
@@ -372,18 +410,28 @@
       // Areas section
       addPreflightSection(container, 'Areas',
         matchedAreas + ' matched',
-        unmatchedAreaSet.size > 0 ? unmatchedAreaSet.size + ' unmatched (rows will import without area_id)' : 'All matched',
+        unmatchedAreaSet.size > 0 ? unmatchedAreaSet.size + ' unmatched (rows will import without area_id — reconcile later)' : 'All matched',
         unmatchedAreaSet.size > 0 ? 'warn' : 'ok',
         unmatchedAreaSet.size > 0 ? Array.from(unmatchedAreaSet).sort() : null
       );
+
+      // Duplicates section
+      if (dupeCount > 0) {
+        addPreflightSection(container, 'Potential Duplicates',
+          dupeCount + ' agreement(s) match existing records (same account + zone + area + category)',
+          'These will still be imported — review if unexpected',
+          'warn',
+          null
+        );
+      }
 
       // Stats
       var statsEl = document.getElementById('import-stats');
       statsEl.textContent = '';
       var stats = [
-        { val: parsedBillingRows.length, lbl: 'Total Records' },
-        { val: newCount, lbl: 'New (to import)' },
-        { val: dupeCount, lbl: 'Duplicates (skip)' }
+        { val: agreementCount, lbl: 'Agreements' },
+        { val: billingCount, lbl: 'Billing Records' },
+        { val: dupeCount, lbl: 'Potential Dupes' }
       ];
       stats.forEach(function(s) {
         var div = document.createElement('div');
@@ -399,8 +447,7 @@
         statsEl.appendChild(div);
       });
 
-      // Disable import if nothing to import
-      document.getElementById('btn-import').disabled = (newCount === 0);
+      document.getElementById('btn-import').disabled = (agreementCount === 0);
     }
 
     function addPreflightSection(container, title, okMsg, issueMsg, status, items) {
@@ -449,8 +496,8 @@
       var textEl = document.getElementById('progress-text');
       logEl.textContent = '';
 
-      var imported = 0;
-      var skipped = 0;
+      var importedAgreements = 0;
+      var importedBilling = 0;
       var errors = 0;
 
       function log(msg, type) {
@@ -463,91 +510,122 @@
         logEl.scrollTop = logEl.scrollHeight;
       }
 
-      // Build records, skipping dupes
-      var records = [];
-      parsedBillingRows.forEach(function(row) {
-        var isAddType = ADD_TYPES.indexOf(row.type.toLowerCase().trim()) !== -1;
-        var acctId = isAddType ? '' : (accountIdMap[row.accountClean.toLowerCase().trim()] || '');
+      function delay(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+
+      // Sort: Additional first, then Agreement
+      var sorted = parsedRows.slice().sort(function(a, b) {
+        if (a.category === 'additional' && b.category !== 'additional') return -1;
+        if (a.category !== 'additional' && b.category === 'additional') return 1;
+        return 0;
+      });
+
+      // Build all agreement and billing records
+      var agreementRecords = [];
+      var billingRecords = [];
+
+      sorted.forEach(function(row) {
+        var isAdditional = row.category === 'additional';
+        var acctKey = row.accountClean.toLowerCase().trim();
         var areaKey = row.zone.toLowerCase().trim() + '||' + row.area.toLowerCase().trim();
+        var acctId = isAdditional ? '' : (accountIdMap[acctKey] || '');
         var areaId = areaIdMap[areaKey] || '';
-        var billingKey = acctId + '|' + areaId + '|' + row.month + '|' + row.year;
 
-        if (existingKeys.has(billingKey)) {
-          skipped++;
-          return;
-        }
-        existingKeys.add(billingKey);
+        var agreementId = generateId('agr');
 
-        records.push({
-          billing_id: generateId('bill'),
+        agreementRecords.push({
+          agreement_id: agreementId,
           account_id: acctId,
-          area_id: areaId,
           account_name: row.accountClean,
+          category: row.category,
+          type: row.type,
           zone: row.zone,
           area: row.area,
-          month: row.month,
-          year: row.year,
-          amount: String(row.amount),
-          type: row.type,
+          area_id: areaId,
           notes: row.notes,
+          payment_notes: row.paymentNotes,
           is_deleted: 'FALSE',
           created_by: CONFIG.CURRENT_USER,
           created_at: nowISO()
         });
+
+        row.months.forEach(function(m) {
+          billingRecords.push({
+            billing_id: generateId('bill'),
+            agreement_id: agreementId,
+            month: m.month,
+            year: m.year,
+            amount: String(m.amount),
+            notes: m.cellNotes,
+            is_deleted: 'FALSE',
+            created_by: CONFIG.CURRENT_USER,
+            created_at: nowISO()
+          });
+        });
       });
 
-      if (records.length > 0) {
-        log('Sample record: amount=' + records[0].amount + ' account=' + records[0].account_name + ' month=' + records[0].month + '/' + records[0].year, 'info');
+      var totalOps = agreementRecords.length + billingRecords.length;
+      var completedOps = 0;
+
+      function updateProgress() {
+        var pct = totalOps > 0 ? Math.round((completedOps / totalOps) * 100) : 0;
+        barEl.style.width = pct + '%';
+        textEl.textContent = 'Importing: ' + completedOps + ' of ' + totalOps + ' records (' + pct + '%)';
       }
-      log('Importing ' + records.length + ' billing records (skipping ' + skipped + ' dupes)...', 'info');
 
-      function delay(ms) { return new Promise(function(resolve) { setTimeout(resolve, ms); }); }
+      // Helper: batch-write records to a sheet
+      async function batchWrite(sheetName, records, label) {
+        var totalBatches = Math.ceil(records.length / BATCH_SIZE);
+        for (var i = 0; i < records.length; i += BATCH_SIZE) {
+          var batch = records.slice(i, i + BATCH_SIZE);
+          var batchNum = Math.floor(i / BATCH_SIZE) + 1;
+          var success = false;
 
-      var totalBatches = Math.ceil(records.length / BATCH_SIZE);
-      for (var i = 0; i < records.length; i += BATCH_SIZE) {
-        var batch = records.slice(i, i + BATCH_SIZE);
-        var batchNum = Math.floor(i / BATCH_SIZE) + 1;
-        var success = false;
-
-        for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-          try {
-            await SheetsAPI.batchAppend(CONFIG.SHEETS.BILLING, batch);
-            imported += batch.length;
-            log('Batch ' + batchNum + '/' + totalBatches + ': ' + batch.length + ' records', 'success');
-            success = true;
-            break;
-          } catch (e) {
-            if (attempt < MAX_RETRIES) {
-              log('Batch ' + batchNum + ' attempt ' + attempt + ' failed, retrying in 2s... (' + e.message + ')', 'info');
-              await delay(2000);
-            } else {
-              errors += batch.length;
-              log('FAILED batch ' + batchNum + ' after ' + MAX_RETRIES + ' attempts: ' + e.message, 'error');
+          for (var attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+              await SheetsAPI.batchAppend(sheetName, batch);
+              completedOps += batch.length;
+              if (label === 'Agreements') importedAgreements += batch.length;
+              else importedBilling += batch.length;
+              log(label + ' batch ' + batchNum + '/' + totalBatches + ': ' + batch.length + ' records', 'success');
+              success = true;
+              break;
+            } catch (e) {
+              if (attempt < MAX_RETRIES) {
+                log(label + ' batch ' + batchNum + ' attempt ' + attempt + ' failed, retrying in 2s... (' + e.message + ')', 'info');
+                await delay(2000);
+              } else {
+                errors += batch.length;
+                completedOps += batch.length;
+                log('FAILED ' + label + ' batch ' + batchNum + ' after ' + MAX_RETRIES + ' attempts: ' + e.message, 'error');
+              }
             }
           }
-        }
 
-        // Throttle between batches
-        if (i + BATCH_SIZE < records.length) {
-          await delay(BATCH_DELAY_MS);
+          updateProgress();
+          if (i + BATCH_SIZE < records.length) await delay(BATCH_DELAY_MS);
         }
-        var pct = Math.round(((i + batch.length) / records.length) * 100);
-        barEl.style.width = pct + '%';
-        textEl.textContent = 'Importing: ' + (i + batch.length) + ' of ' + records.length + ' (' + pct + '%)';
       }
 
+      // Phase 1: Write agreements
+      log('Importing ' + agreementRecords.length + ' agreements...', 'info');
+      await batchWrite(CONFIG.SHEETS.BILLING_AGREEMENTS, agreementRecords, 'Agreements');
+
+      // Phase 2: Write billing records
+      log('Importing ' + billingRecords.length + ' billing records...', 'info');
+      await batchWrite(CONFIG.SHEETS.BILLING, billingRecords, 'Billing');
+
       log('Import complete!', 'info');
-      showSummary(imported, skipped, errors);
+      showSummary(importedAgreements, importedBilling, errors);
     }
 
     // ─── Summary ───
-    function showSummary(imported, skipped, errors) {
+    function showSummary(agreements, billing, errors) {
       showStep('step-summary');
       var el = document.getElementById('summary-cards');
       el.textContent = '';
       var cards = [
-        { val: imported, lbl: 'Records Imported' },
-        { val: skipped, lbl: 'Dupes Skipped' }
+        { val: agreements, lbl: 'Agreements Created' },
+        { val: billing, lbl: 'Billing Records Created' }
       ];
       if (errors > 0) cards.push({ val: errors, lbl: 'Errors', cls: 'err' });
 
@@ -572,7 +650,7 @@
       var reader = new FileReader();
       reader.onload = async function(e) {
         parseExcel(new Uint8Array(e.target.result));
-        if (parsedBillingRows.length === 0) {
+        if (parsedRows.length === 0) {
           showToast('No billing data found', 'error');
           return;
         }
@@ -590,10 +668,10 @@
     }
 
     function resetImport() {
-      parsedBillingRows = [];
+      parsedRows = [];
       unmatchedAccounts = new Set();
       unmatchedAreas = new Set();
-      existingKeys = new Set();
+      existingAgreementKeys = new Set();
       document.getElementById('dropArea').classList.remove('has-file');
       var label = document.getElementById('dropLabel');
       label.textContent = '';
