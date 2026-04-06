@@ -391,10 +391,50 @@ async function loadLinkedAgreements(accountId) {
     return (monthOrder[b.month] || 0) - (monthOrder[a.month] || 0);
   });
 
+  function fmtAmt(v) { return v.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  var SHADED_BG = 'var(--color-gray-100)';
+  var YEAR_ROW_CSS = 'font-weight:600;background:var(--color-gray-200);';
+  var TOTAL_ROW_CSS = 'font-weight:700;border-top:2px solid var(--color-gray-400);';
+
+  // Track month groups for alternating shading and year totals
+  var prevMonthKey = '';
+  var shadeToggle = false;
+  var prevYear = '';
+  var yearTotals = {}; // year -> total
   var grandTotal = 0;
-  allRecords.forEach(function(r) {
+
+  allRecords.forEach(function(r, idx) {
+    var monthKey = r.month + '|' + r.year;
+    if (monthKey !== prevMonthKey) {
+      shadeToggle = !shadeToggle;
+      prevMonthKey = monthKey;
+    }
+
+    // Insert annual total row when year changes
+    if (prevYear && r.year !== prevYear && yearTotals[prevYear] != null) {
+      var ytTr = document.createElement('tr');
+      ytTr.style.cssText = YEAR_ROW_CSS;
+      var ytLabel = document.createElement('td');
+      ytLabel.colSpan = 2;
+      ytLabel.textContent = prevYear + ' Total';
+      ytLabel.style.cssText = 'font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;';
+      ytTr.appendChild(ytLabel);
+      var ytAmt = document.createElement('td');
+      ytAmt.className = 'amount';
+      ytAmt.textContent = fmtAmt(yearTotals[prevYear]);
+      ytTr.appendChild(ytAmt);
+      ytTr.appendChild(document.createElement('td'));
+      ytTr.appendChild(document.createElement('td'));
+      payTbody.appendChild(ytTr);
+    }
+    prevYear = r.year;
+
+    if (!yearTotals[r.year]) yearTotals[r.year] = 0;
+    yearTotals[r.year] += r.amount;
     grandTotal += r.amount;
+
     var tr = document.createElement('tr');
+    if (shadeToggle) tr.style.background = SHADED_BG;
 
     var tdMonth = document.createElement('td');
     tdMonth.textContent = r.month;
@@ -406,7 +446,7 @@ async function loadLinkedAgreements(accountId) {
 
     var tdAmt = document.createElement('td');
     tdAmt.className = 'amount';
-    tdAmt.textContent = r.amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    tdAmt.textContent = fmtAmt(r.amount);
     tr.appendChild(tdAmt);
 
     var tdArea = document.createElement('td');
@@ -422,19 +462,65 @@ async function loadLinkedAgreements(accountId) {
     payTbody.appendChild(tr);
   });
 
-  // Grand total
-  var totalTr = document.createElement('tr');
-  totalTr.className = 'pay-total';
-  var totalLabel = document.createElement('td');
-  totalLabel.colSpan = 2;
-  totalLabel.textContent = 'Total';
-  totalLabel.style.cssText = 'font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;';
-  totalTr.appendChild(totalLabel);
-  var totalAmt = document.createElement('td');
-  totalAmt.className = 'amount';
-  totalAmt.textContent = grandTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  totalTr.appendChild(totalAmt);
-  totalTr.appendChild(document.createElement('td'));
-  totalTr.appendChild(document.createElement('td'));
-  payTbody.appendChild(totalTr);
+  // Final year total (for the last year in the list)
+  if (prevYear && yearTotals[prevYear] != null) {
+    var ytTr = document.createElement('tr');
+    ytTr.style.cssText = YEAR_ROW_CSS;
+    var ytLabel = document.createElement('td');
+    ytLabel.colSpan = 2;
+    ytLabel.textContent = prevYear + ' Total';
+    ytLabel.style.cssText = 'font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;';
+    ytTr.appendChild(ytLabel);
+    var ytAmt = document.createElement('td');
+    ytAmt.className = 'amount';
+    ytAmt.textContent = fmtAmt(yearTotals[prevYear]);
+    ytTr.appendChild(ytAmt);
+    ytTr.appendChild(document.createElement('td'));
+    ytTr.appendChild(document.createElement('td'));
+    payTbody.appendChild(ytTr);
+  }
+
+  // Annual summary + grand total
+  var years = Object.keys(yearTotals).sort(function(a, b) { return parseInt(b) - parseInt(a); });
+  if (years.length > 0) {
+    // Spacer
+    var spacerTr = document.createElement('tr');
+    var spacerTd = document.createElement('td');
+    spacerTd.colSpan = 5;
+    spacerTd.style.cssText = 'height:12px;border:none;';
+    spacerTr.appendChild(spacerTd);
+    payTbody.appendChild(spacerTr);
+
+    years.forEach(function(yr) {
+      var tr = document.createElement('tr');
+      tr.style.cssText = 'font-weight:600;';
+      var tdLabel = document.createElement('td');
+      tdLabel.colSpan = 2;
+      tdLabel.textContent = yr;
+      tdLabel.style.cssText = 'font-family:var(--font-ui);font-size:11px;';
+      tr.appendChild(tdLabel);
+      var tdAmt = document.createElement('td');
+      tdAmt.className = 'amount';
+      tdAmt.textContent = fmtAmt(yearTotals[yr]);
+      tr.appendChild(tdAmt);
+      tr.appendChild(document.createElement('td'));
+      tr.appendChild(document.createElement('td'));
+      payTbody.appendChild(tr);
+    });
+
+    var totalTr = document.createElement('tr');
+    totalTr.style.cssText = TOTAL_ROW_CSS;
+    var totalLabel = document.createElement('td');
+    totalLabel.colSpan = 2;
+    totalLabel.textContent = 'Grand Total';
+    totalLabel.style.cssText = 'font-family:var(--font-ui);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;';
+    totalTr.appendChild(totalLabel);
+    var totalAmt = document.createElement('td');
+    totalAmt.className = 'amount';
+    totalAmt.textContent = fmtAmt(grandTotal);
+    totalTr.appendChild(totalAmt);
+    totalTr.appendChild(document.createElement('td'));
+    totalTr.appendChild(document.createElement('td'));
+    payTbody.appendChild(totalTr);
+  }
 }
