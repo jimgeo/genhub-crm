@@ -105,9 +105,20 @@
             <div class="card-header">
               <h3 class="card-title">Upload Excel File</h3>
             </div>
-            <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
-              Upload the Monthly Expected Forecast .xlsx file. Each row creates a Billing Agreement record, and each non-blank monthly cell creates a linked Billing record. Columns are matched by header name. Additional category rows are imported first.
-            </p>
+            <div style="font-size:13px;color:var(--color-gray-600);margin-bottom:20px;line-height:1.7;">
+              <h4 class="card-title" style="margin-bottom:10px;">How It Works</h4>
+              <ol style="margin:0 0 12px 18px;padding:0;">
+                <li>Upload the Monthly Expected Forecast <code>.xlsx</code> file. Columns are matched by <strong>header name</strong>, not position.</li>
+                <li>Each spreadsheet row becomes a <strong>Billing Agreement</strong> — storing the account, zone, area, category, type, notes, and payment notes.</li>
+                <li>Each non-blank monthly cell becomes a <strong>Billing record</strong> linked to its agreement. Zero amounts are included; only completely blank cells are skipped. Text in a cell is stored as a billing note.</li>
+                <li><strong>Additional</strong> category rows import first and skip account matching. <strong>Agreement</strong> rows match against existing accounts. <strong>Title</strong>, <strong>Totals</strong>, and blank category rows are ignored.</li>
+                <li>Zone + Area are matched to the Area sheet. Unmatched areas still import (with a blank area_id) so you can reconcile them later.</li>
+                <li>A <strong>pre-flight check</strong> runs before import — flagging unmatched accounts, unmatched areas, and potential duplicates. Duplicates are allowed but highlighted for review.</li>
+              </ol>
+              <p style="margin:0;font-size:12px;color:var(--color-gray-400);">
+                <strong>Billing report note:</strong> Areas marked as "current" in the Area sheet that have no active agreement will appear as vacant rows in the Billing Forecast report, so you can see which areas are unoccupied.
+              </p>
+            </div>
             <div class="file-upload-area" id="dropArea">
               <div class="file-icon">&#128200;</div>
               <p id="dropLabel"><strong>Click to select</strong> or drag &amp; drop your .xlsx file</p>
