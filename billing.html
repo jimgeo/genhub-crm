@@ -62,6 +62,9 @@
         <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
           <input type="checkbox" id="hide-vacant"> Hide vacant
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
+          <input type="checkbox" id="show-notes"> Show notes
+        </label>
         <span id="record-count" style="font-family:var(--font-ui);font-size:11px;color:var(--color-gray-400);margin-left:auto;"></span>
       </div>
 
@@ -86,6 +89,7 @@
     var allCols = [];
     var showOld = false;
     var hideVacant = false;
+    var showNotes = false;
 
     async function loadBilling() {
       var data = await SheetsAPI.batchGet([
@@ -132,10 +136,11 @@
         var rowKey = acctName.toLowerCase() + '|' + zone.toLowerCase() + '|' + area.toLowerCase();
         var areaKey = zone.toLowerCase() + '|' + area.toLowerCase();
         if (!rowMap[rowKey]) {
-          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, category: category || areaCategoryMap[areaKey] || '', amounts: {} };
+          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, category: category || areaCategoryMap[areaKey] || '', amounts: {}, notes: {} };
         }
         if (type === 'old') rowMap[rowKey].type = 'old';
         rowMap[rowKey].amounts[colKey] = (rowMap[rowKey].amounts[colKey] || 0) + amount;
+        if (b.notes) rowMap[rowKey].notes[colKey] = b.notes;
       });
 
       var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
@@ -160,7 +165,7 @@
         if (!activeAreaKeys[key]) {
           var rowKey = '(vacant)|' + key;
           if (!rowMap[rowKey]) {
-            rowMap[rowKey] = { account_name: '(vacant)', zone: a.zone || '', area: a.area || '', type: 'vacant', category: (a.category || '').toLowerCase().trim(), amounts: {} };
+            rowMap[rowKey] = { account_name: '(vacant)', zone: a.zone || '', area: a.area || '', type: 'vacant', category: (a.category || '').toLowerCase().trim(), amounts: {}, notes: {} };
           }
         }
       });
@@ -291,7 +296,13 @@
             var hide = ztr.classList.contains('collapsed');
             var next = ztr.nextElementSibling;
             while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
-              next.style.display = hide ? 'none' : '';
+              if (hide) {
+                next.style.display = 'none';
+              } else if (next.classList.contains('notes-row')) {
+                next.style.display = showNotes ? '' : 'none';
+              } else {
+                next.style.display = '';
+              }
               next = next.nextElementSibling;
             }
           });
@@ -320,6 +331,7 @@
         tdType.textContent = row.type;
         tr.appendChild(tdType);
 
+        var hasNotes = false;
         cols.forEach(function(col) {
           var td = document.createElement('td');
           td.className = 'amount';
@@ -327,11 +339,33 @@
           if (val != null) {
             td.textContent = val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             td.classList.add('has-value');
-            if (row.type !== 'old') colTotals[col] += val;
+            colTotals[col] += val;
           }
+          if (row.notes[col]) hasNotes = true;
           tr.appendChild(td);
         });
         tbody.appendChild(tr);
+
+        // Notes row (hidden unless showNotes is on and row has notes)
+        if (hasNotes) {
+          var notesTr = document.createElement('tr');
+          notesTr.className = 'notes-row';
+          notesTr.setAttribute('data-zone', row.zone || 'No Zone');
+          if (!showNotes) notesTr.style.display = 'none';
+          var noteLabel = document.createElement('td');
+          noteLabel.colSpan = 3;
+          noteLabel.className = 'sticky-col col-account';
+          noteLabel.style.cssText = 'font-size:9px;color:var(--color-gray-400);font-style:italic;';
+          noteLabel.textContent = 'Notes';
+          notesTr.appendChild(noteLabel);
+          cols.forEach(function(col) {
+            var td = document.createElement('td');
+            td.style.cssText = 'font-size:9px;color:var(--color-info);font-style:italic;white-space:normal;max-width:80px;';
+            if (row.notes[col]) td.textContent = row.notes[col];
+            notesTr.appendChild(td);
+          });
+          tbody.appendChild(notesTr);
+        }
       });
 
       // Totals row
@@ -369,6 +403,10 @@
       });
       document.getElementById('hide-vacant').addEventListener('change', function() {
         hideVacant = this.checked;
+        renderTable();
+      });
+      document.getElementById('show-notes').addEventListener('change', function() {
+        showNotes = this.checked;
         renderTable();
       });
       await loadBilling();
