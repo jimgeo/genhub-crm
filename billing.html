@@ -15,8 +15,8 @@
       letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-gray-500);
       background: var(--color-gray-100); position: sticky; top: 0; z-index: 2;
     }
-    .billing-table .sticky-col { position: sticky; background: var(--color-white); z-index: 1; }
-    .billing-table th.sticky-col { z-index: 3; background: var(--color-gray-100); }
+    .billing-table .sticky-col { position: sticky; background: var(--color-white); z-index: 4; }
+    .billing-table th.sticky-col { z-index: 5; background: var(--color-gray-100); }
     .billing-table .col-account { left: 0; min-width: 140px; }
     .billing-table .col-area { left: 140px; min-width: 90px; }
     .billing-table .col-type { left: 230px; min-width: 60px; }
@@ -41,9 +41,9 @@
     .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
     .billing-table td.cat-additional { background: #e8f4fd; }
 
-    .billing-table tr:hover td.sticky-col { z-index: 3; background: var(--color-gray-50); }
+    .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-50); }
 
-    .billing-table td.has-note { position: relative; }
+    .billing-table td.has-note { position: relative; z-index: 0; }
     .billing-table td.has-note::after {
       content: ''; position: absolute; top: 3px; right: 3px;
       width: 6px; height: 6px; border-radius: 50%; background: var(--color-info);
@@ -55,6 +55,7 @@
       padding: 6px 10px; border-radius: var(--radius); z-index: 10;
       pointer-events: none; line-height: 1.4;
     }
+    .billing-table td.has-note:hover { z-index: 3; }
     .billing-table td.has-note:hover .note-tip { display: block; }
 
     .zone-notes-btn {
