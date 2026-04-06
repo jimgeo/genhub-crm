@@ -139,9 +139,10 @@ async function loadAccountDetail() {
 
   document.getElementById('btn-delete').style.display = '';
 
-  // Load linked contacts and areas
+  // Load linked contacts, areas, agreements, and payments
   await loadLinkedContacts(id);
   await loadLinkedAreas(id);
+  await loadLinkedAgreements(id);
 }
 
 async function loadLinkedContacts(accountId) {
@@ -235,7 +236,7 @@ async function loadLinkedAreas(accountId) {
     }
     tr.onclick = function() { window.location.href = 'area-detail.html?id=' + encodeURIComponent(link.area_id); };
 
-    [area.zone || '', area.area || '', area.single_multi || '', link.date_from || '', link.date_to || '', isCur ? 'Yes' : 'No'].forEach(function(val) {
+    [area.zone || '', area.area || '', area.member_single_multi || '', link.date_from || '', link.date_to || '', isCur ? 'Yes' : 'No'].forEach(function(val) {
       var td = document.createElement('td');
       td.textContent = val;
       tr.appendChild(td);
@@ -292,5 +293,140 @@ async function deleteAccount() {
     setTimeout(() => { window.location.href = 'accounts.html'; }, 500);
   } catch (e) {
     showToast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+// ─── Agreements & Payments ───
+
+async function loadLinkedAgreements(accountId) {
+  var agrSection = document.getElementById('agreements-section');
+  var paySection = document.getElementById('payments-section');
+  if (!agrSection || !paySection) return;
+
+  var data = await SheetsAPI.batchGet([CONFIG.SHEETS.BILLING_AGREEMENTS, CONFIG.SHEETS.BILLING]);
+  var agreements = (data.Billing_Agreement || []).filter(function(a) {
+    return a.account_id === accountId && a.is_deleted !== 'TRUE';
+  });
+  var allBilling = (data.Billing || []).filter(function(b) { return b.is_deleted !== 'TRUE'; });
+
+  if (agreements.length === 0) return;
+
+  // Show agreements table
+  agrSection.style.display = '';
+  var agrTbody = document.getElementById('agreements-tbody');
+  agrTbody.textContent = '';
+
+  // Build agreement map and billing lookup
+  var agreementIds = new Set();
+  agreements.forEach(function(a) { agreementIds.add(a.agreement_id); });
+
+  var billingByAgreement = {};
+  allBilling.forEach(function(b) {
+    if (!agreementIds.has(b.agreement_id)) return;
+    if (!billingByAgreement[b.agreement_id]) billingByAgreement[b.agreement_id] = [];
+    billingByAgreement[b.agreement_id].push(b);
+  });
+
+  var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
+
+  agreements.forEach(function(a) {
+    var tr = document.createElement('tr');
+    [a.category || '', a.type || '', a.zone || '', a.area || '', a.notes || '', a.payment_notes || ''].forEach(function(val) {
+      var td = document.createElement('td');
+      td.textContent = val;
+      tr.appendChild(td);
+    });
+    agrTbody.appendChild(tr);
+  });
+
+  // Payment summary grouped by agreement
+  paySection.style.display = '';
+  var payTbody = document.getElementById('payments-tbody');
+  payTbody.textContent = '';
+
+  var grandTotal = 0;
+
+  agreements.forEach(function(a) {
+    var records = billingByAgreement[a.agreement_id] || [];
+    if (records.length === 0) return;
+
+    // Sort by year desc, month desc
+    records.sort(function(x, y) {
+      var yd = parseInt(y.year) - parseInt(x.year);
+      if (yd !== 0) return yd;
+      return (monthOrder[y.month] || 0) - (monthOrder[x.month] || 0);
+    });
+
+    // Group header
+    var groupLabel = (a.zone || '') + ' / ' + (a.area || '');
+    if (a.category) groupLabel = a.category + ' — ' + groupLabel;
+    var groupTr = document.createElement('tr');
+    groupTr.className = 'pay-group-row';
+    var groupTd = document.createElement('td');
+    groupTd.colSpan = 4;
+    groupTd.textContent = groupLabel;
+    groupTr.appendChild(groupTd);
+    payTbody.appendChild(groupTr);
+
+    var agrTotal = 0;
+    records.forEach(function(b) {
+      var amount = parseFloat(b.amount) || 0;
+      agrTotal += amount;
+
+      var tr = document.createElement('tr');
+      var tdMonth = document.createElement('td');
+      tdMonth.textContent = b.month || '';
+      tr.appendChild(tdMonth);
+
+      var tdYear = document.createElement('td');
+      tdYear.textContent = b.year || '';
+      tr.appendChild(tdYear);
+
+      var tdAmt = document.createElement('td');
+      tdAmt.className = 'amount';
+      tdAmt.textContent = amount.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      tr.appendChild(tdAmt);
+
+      var tdNotes = document.createElement('td');
+      tdNotes.textContent = b.notes || '';
+      tdNotes.style.cssText = 'font-size:10px;color:var(--color-gray-500);';
+      tr.appendChild(tdNotes);
+
+      payTbody.appendChild(tr);
+    });
+
+    // Agreement subtotal
+    var subTr = document.createElement('tr');
+    subTr.style.cssText = 'font-weight:600;background:var(--color-gray-50);';
+    var subEmpty1 = document.createElement('td');
+    subEmpty1.colSpan = 2;
+    subEmpty1.textContent = 'Subtotal';
+    subEmpty1.style.cssText = 'font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-gray-500);';
+    subTr.appendChild(subEmpty1);
+    var subAmt = document.createElement('td');
+    subAmt.className = 'amount';
+    subAmt.textContent = agrTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    subTr.appendChild(subAmt);
+    subTr.appendChild(document.createElement('td'));
+    payTbody.appendChild(subTr);
+
+    grandTotal += agrTotal;
+  });
+
+  // Grand total
+  if (agreements.length > 1) {
+    var totalTr = document.createElement('tr');
+    totalTr.className = 'pay-total';
+    var totalLabel = document.createElement('td');
+    totalLabel.colSpan = 2;
+    totalLabel.textContent = 'Total';
+    totalLabel.style.cssText = 'font-family:var(--font-ui);font-size:10px;text-transform:uppercase;letter-spacing:0.5px;';
+    totalTr.appendChild(totalLabel);
+    var totalAmt = document.createElement('td');
+    totalAmt.className = 'amount';
+    totalAmt.textContent = grandTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    totalTr.appendChild(totalAmt);
+    totalTr.appendChild(document.createElement('td'));
+    payTbody.appendChild(totalTr);
   }
 }

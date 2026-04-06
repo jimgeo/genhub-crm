@@ -6,6 +6,56 @@
   <title>Account — GenHub CRM</title>
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .acct-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+    .acct-layout .card { margin: 0; }
+    .acct-form .form-grid { grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+    .acct-form .form-input, .acct-form .form-select { padding: 7px 10px; font-size: 13px; }
+    .acct-form .section-title { margin: 20px 0 12px; }
+    .acct-form .section-title:first-child { margin-top: 0; }
+
+    .addr-toggle {
+      font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+      letter-spacing: 1.5px; text-transform: uppercase; color: var(--color-info);
+      cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 4px;
+      margin: 16px 0 0;
+    }
+    .addr-toggle .arrow { display: inline-block; transition: transform 0.15s; font-size: 8px; }
+    .addr-toggle.open .arrow { transform: rotate(90deg); }
+    .addr-section { display: none; margin-top: 12px; }
+    .addr-section.open { display: block; }
+
+    .contacts-panel .table-wrapper { max-height: 400px; overflow-y: auto; }
+    .contacts-panel table { font-size: 12px; }
+    .contacts-panel th { font-size: 10px; }
+    .contacts-panel td { padding: 6px 8px; }
+
+    .agr-table, .pay-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .agr-table th, .pay-table th {
+      font-family: var(--font-ui); font-size: 9px; font-weight: 600;
+      letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-gray-500);
+      background: var(--color-gray-100); padding: 6px 8px; text-align: left;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .agr-table td, .pay-table td { padding: 5px 8px; border-bottom: 1px solid var(--color-gray-100); }
+    .agr-table tr:hover td, .pay-table tr:hover td { background: var(--color-gray-50); }
+    .agr-table td.amount, .pay-table td.amount {
+      text-align: right; font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .pay-group-row td {
+      font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+      background: var(--color-gray-100); color: var(--color-gray-600);
+      padding: 6px 8px; border-bottom: 1px solid var(--color-gray-200);
+    }
+    .pay-total td {
+      font-weight: 600; border-top: 2px solid var(--color-gray-300);
+      padding: 6px 8px;
+    }
+
+    @media (max-width: 900px) {
+      .acct-layout { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
   <header class="app-header" id="app-header"></header>
@@ -17,106 +67,159 @@
         <h1 class="page-title" id="page-title">New Account</h1>
       </div>
 
-      <div class="card">
-        <div class="section-title">Details</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Account Name</label>
-            <input type="text" class="form-input" id="f-name" required>
+      <div class="acct-layout">
+        <!-- Left: Account Details -->
+        <div>
+          <div class="card acct-form">
+            <div class="section-title">Details</div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label class="form-label">Account Name</label>
+                <input type="text" class="form-input" id="f-name" required>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Type</label>
+                <select class="form-select" id="f-type">
+                  <option value="">— Select —</option>
+                  <option value="Tenant">Tenant</option>
+                  <option value="Virtual">Virtual</option>
+                  <option value="Meeting Room">Meeting Room</option>
+                  <option value="Partner">Partner</option>
+                  <option value="Vendor">Vendor</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" class="form-input" id="f-phone">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email</label>
+                <input type="email" class="form-input" id="f-email">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Website</label>
+                <input type="url" class="form-input" id="f-website">
+              </div>
+            </div>
+
+            <div class="addr-toggle" id="addr-toggle" onclick="toggleAddress()">
+              <span class="arrow">&#9654;</span> Address
+            </div>
+            <div class="addr-section" id="addr-section">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Address Line 1</label>
+                  <input type="text" class="form-input" id="f-address_line1">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Address Line 2</label>
+                  <input type="text" class="form-input" id="f-address_line2">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">City</label>
+                  <input type="text" class="form-input" id="f-city">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Postcode</label>
+                  <input type="text" class="form-input" id="f-postcode">
+                </div>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" id="btn-save" onclick="saveAccount()">Save</button>
+              <a href="accounts.html" class="btn">Cancel</a>
+              <button class="btn btn-danger" id="btn-delete" style="display:none;margin-left:auto;" onclick="deleteAccount()">Delete</button>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Type</label>
-            <select class="form-select" id="f-type">
-              <option value="">— Select —</option>
-              <option value="Tenant">Tenant</option>
-              <option value="Virtual">Virtual</option>
-              <option value="Meeting Room">Meeting Room</option>
-              <option value="Partner">Partner</option>
-              <option value="Vendor">Vendor</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Phone</label>
-            <input type="tel" class="form-input" id="f-phone">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Email</label>
-            <input type="email" class="form-input" id="f-email">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Website</label>
-            <input type="url" class="form-input" id="f-website">
+
+          <!-- Linked Areas -->
+          <div class="linked-section" id="areas-section" style="display:none;">
+            <div class="linked-header">
+              <h3 class="card-title">Areas</h3>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zone</th>
+                    <th>Area</th>
+                    <th>Type</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th>Current</th>
+                  </tr>
+                </thead>
+                <tbody id="areas-tbody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
 
-        <div class="section-title">Address</div>
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Address Line 1</label>
-            <input type="text" class="form-input" id="f-address_line1">
+        <!-- Right: Contacts -->
+        <div class="contacts-panel">
+          <div class="linked-section" id="contacts-section" style="display:none;">
+            <div class="linked-header">
+              <h3 class="card-title">Contacts</h3>
+              <a id="add-contact-link" href="#" class="btn btn-sm">Add Contact</a>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>Job Title</th>
+                    <th>Primary</th>
+                    <th>Current</th>
+                  </tr>
+                </thead>
+                <tbody id="contacts-tbody"></tbody>
+              </table>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">Address Line 2</label>
-            <input type="text" class="form-input" id="f-address_line2">
-          </div>
-          <div class="form-group">
-            <label class="form-label">City</label>
-            <input type="text" class="form-input" id="f-city">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Postcode</label>
-            <input type="text" class="form-input" id="f-postcode">
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button class="btn btn-primary" id="btn-save" onclick="saveAccount()">Save</button>
-          <a href="accounts.html" class="btn">Cancel</a>
-          <button class="btn btn-danger" id="btn-delete" style="display:none;margin-left:auto;" onclick="deleteAccount()">Delete</button>
         </div>
       </div>
 
-      <!-- Linked Contacts -->
-      <div class="linked-section" id="contacts-section" style="display:none;">
+      <!-- Agreements -->
+      <div class="linked-section" id="agreements-section" style="display:none;margin-top:32px;">
         <div class="linked-header">
-          <h3 class="card-title">Contacts</h3>
-          <a id="add-contact-link" href="#" class="btn btn-sm">Add Contact</a>
+          <h3 class="card-title">Billing Agreements</h3>
         </div>
         <div class="table-wrapper">
-          <table>
+          <table class="agr-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>Job Title</th>
-                <th>Primary</th>
-                <th>Current</th>
+                <th>Category</th>
+                <th>Type</th>
+                <th>Zone</th>
+                <th>Area</th>
+                <th>Notes</th>
+                <th>Payment Notes</th>
               </tr>
             </thead>
-            <tbody id="contacts-tbody"></tbody>
+            <tbody id="agreements-tbody"></tbody>
           </table>
         </div>
       </div>
 
-      <!-- Linked Areas -->
-      <div class="linked-section" id="areas-section" style="display:none;">
+      <!-- Payment Summary -->
+      <div class="linked-section" id="payments-section" style="display:none;margin-top:32px;">
         <div class="linked-header">
-          <h3 class="card-title">Areas</h3>
+          <h3 class="card-title">Payment Summary</h3>
         </div>
         <div class="table-wrapper">
-          <table>
+          <table class="pay-table">
             <thead>
               <tr>
-                <th>Zone</th>
-                <th>Area</th>
-                <th>Type</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Current</th>
+                <th>Month</th>
+                <th>Year</th>
+                <th style="text-align:right;">Amount</th>
+                <th>Notes</th>
               </tr>
             </thead>
-            <tbody id="areas-tbody"></tbody>
+            <tbody id="payments-tbody"></tbody>
           </table>
         </div>
       </div>
@@ -130,9 +233,29 @@
   <script src="js/layout.js"></script>
   <script src="js/accounts.js"></script>
   <script>
+    function toggleAddress() {
+      var toggle = document.getElementById('addr-toggle');
+      var section = document.getElementById('addr-section');
+      toggle.classList.toggle('open');
+      section.classList.toggle('open');
+    }
+
+    // Auto-open address if any address field has a value
+    function checkAddressFields() {
+      var fields = ['f-address_line1', 'f-address_line2', 'f-city', 'f-postcode'];
+      for (var i = 0; i < fields.length; i++) {
+        var el = document.getElementById(fields[i]);
+        if (el && el.value.trim()) {
+          toggleAddress();
+          return;
+        }
+      }
+    }
+
     (async () => {
       await initApp();
       await loadAccountDetail();
+      checkAddressFields();
     })();
   </script>
 </body>
