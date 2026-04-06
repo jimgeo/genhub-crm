@@ -88,15 +88,23 @@
     var hideVacant = false;
 
     async function loadBilling() {
-      var data = await SheetsAPI.batchGet([CONFIG.SHEETS.BILLING, CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS]);
+      var data = await SheetsAPI.batchGet([
+        CONFIG.SHEETS.BILLING, CONFIG.SHEETS.BILLING_AGREEMENTS,
+        CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS
+      ]);
       var billing = (data.Billing || []).filter(function(b) { return b.is_deleted !== 'TRUE'; });
+      var agreements = (data.Billing_Agreement || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
       var accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
       var areas = (data.Area || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+
+      // Build agreement lookup
+      var agreementMap = {};
+      agreements.forEach(function(a) { agreementMap[a.agreement_id] = a; });
 
       var acctNames = {};
       accounts.forEach(function(a) { acctNames[a.account_id] = a.name; });
 
-      // Build area category lookup: "zone|area" -> category
+      // Build area category lookup
       var areaCategoryMap = {};
       areas.forEach(function(a) {
         var key = (a.zone || '').toLowerCase() + '|' + (a.area || '').toLowerCase();
@@ -107,10 +115,12 @@
       var rowMap = {};
 
       billing.forEach(function(b) {
-        var acctName = b.account_name || acctNames[b.account_id] || b.account_id || '';
-        var zone = b.zone || '';
-        var area = b.area || '';
-        var type = (b.type || '').toLowerCase().trim();
+        var agr = agreementMap[b.agreement_id] || {};
+        var acctName = agr.account_name || acctNames[agr.account_id] || '';
+        var zone = agr.zone || '';
+        var area = agr.area || '';
+        var type = (agr.type || '').toLowerCase().trim();
+        var category = (agr.category || '').toLowerCase().trim();
         var month = (b.month || '').toUpperCase();
         var year = b.year || '';
         var amount = parseFloat(b.amount) || 0;
@@ -122,17 +132,16 @@
         var rowKey = acctName.toLowerCase() + '|' + zone.toLowerCase() + '|' + area.toLowerCase();
         var areaKey = zone.toLowerCase() + '|' + area.toLowerCase();
         if (!rowMap[rowKey]) {
-          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, category: areaCategoryMap[areaKey] || '', amounts: {} };
+          rowMap[rowKey] = { account_name: acctName, zone: zone, area: area, type: type, category: category || areaCategoryMap[areaKey] || '', amounts: {} };
         }
-        // If any billing record for this row is 'old' or 'add old', mark the whole row old
-        if (type === 'old' || type === 'add old') rowMap[rowKey].type = 'old';
+        if (type === 'old') rowMap[rowKey].type = 'old';
         rowMap[rowKey].amounts[colKey] = (rowMap[rowKey].amounts[colKey] || 0) + amount;
       });
 
       var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
       allCols = Object.keys(colSet).sort(function(a, b) {
         var ca = colSet[a], cb = colSet[b];
-        var d = parseInt(cb.year) - parseInt(ca.year); // newest first
+        var d = parseInt(cb.year) - parseInt(ca.year);
         if (d !== 0) return d;
         return (monthOrder[cb.month] || 0) - (monthOrder[ca.month] || 0);
       });
@@ -156,7 +165,6 @@
         }
       });
 
-      // Sort by zone (using lookup order, unlisted zones alphabetically after), then area, then account
       var zoneOrder = Lookups.get('zone');
       allRows = Object.values(rowMap).sort(function(a, b) {
         var ai = zoneOrder.indexOf(a.zone);
