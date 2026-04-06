@@ -303,9 +303,14 @@ async function loadLinkedAgreements(accountId) {
   var paySection = document.getElementById('payments-section');
   if (!agrSection || !paySection) return;
 
+  var acctName = (_editingAccount && _editingAccount.name) ? _editingAccount.name.toLowerCase().trim() : '';
   var data = await SheetsAPI.batchGet([CONFIG.SHEETS.BILLING_AGREEMENTS, CONFIG.SHEETS.BILLING]);
   var agreements = (data.Billing_Agreement || []).filter(function(a) {
-    return a.account_id === accountId && a.is_deleted !== 'TRUE';
+    if (a.is_deleted === 'TRUE') return false;
+    if (a.account_id === accountId) return true;
+    // Fallback: match on account_name (cleaned name from import may differ slightly)
+    if (acctName && (a.account_name || '').toLowerCase().trim() === acctName) return true;
+    return false;
   });
   var allBilling = (data.Billing || []).filter(function(b) { return b.is_deleted !== 'TRUE'; });
 
