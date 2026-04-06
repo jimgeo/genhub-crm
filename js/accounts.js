@@ -304,8 +304,15 @@ async function loadLinkedAgreements(accountId) {
   if (!agrSection || !paySection) return;
 
   var acctName = (_editingAccount && _editingAccount.name) ? _editingAccount.name.toLowerCase().trim() : '';
+  console.log('[agreements] accountId:', accountId, '| acctName:', acctName);
   var data = await SheetsAPI.batchGet([CONFIG.SHEETS.BILLING_AGREEMENTS, CONFIG.SHEETS.BILLING]);
-  var agreements = (data.Billing_Agreement || []).filter(function(a) {
+  var allAgr = (data.Billing_Agreement || []);
+  console.log('[agreements] total agreements:', allAgr.length);
+  if (allAgr.length > 0) console.log('[agreements] sample:', JSON.stringify({ account_id: allAgr[0].account_id, account_name: allAgr[0].account_name, is_deleted: allAgr[0].is_deleted }));
+  var matchById = allAgr.filter(function(a) { return a.account_id === accountId; });
+  var matchByName = allAgr.filter(function(a) { return (a.account_name || '').toLowerCase().trim() === acctName; });
+  console.log('[agreements] matchById:', matchById.length, '| matchByName:', matchByName.length);
+  var agreements = allAgr.filter(function(a) {
     if (a.is_deleted === 'TRUE') return false;
     if (a.account_id === accountId) return true;
     // Fallback: match on account_name (cleaned name from import may differ slightly)
