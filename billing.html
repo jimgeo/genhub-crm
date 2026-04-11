@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="css/styles.css">
   <style>
     .billing-table-wrap { overflow-x: auto; max-width: 100%; }
-    .billing-table { border-collapse: collapse; font-size: 10px; white-space: nowrap; }
+    .billing-table { border-collapse: separate; border-spacing: 0; font-size: 10px; white-space: nowrap; }
     .billing-table th, .billing-table td { padding: 4px 8px; border: 1px solid var(--color-gray-200); }
     .billing-table th {
       font-family: var(--font-ui); font-size: 9px; font-weight: 600;
@@ -22,8 +22,7 @@
     .billing-table .col-type { left: 230px; min-width: 60px; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
     .billing-table td.amount { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; }
     .billing-table td.amount.has-value { background: #f0faf4; }
-    .billing-table tr:hover td { background: var(--color-gray-50); }
-    .billing-table tr:hover td.has-value { background: #e0f5e9; }
+    .billing-table tr:hover td.sticky-col { background: var(--color-gray-100); }
     .billing-total td { font-weight: 600; background: var(--color-gray-100) !important; }
 
     .zone-group-row td {
@@ -41,22 +40,19 @@
     .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
     .billing-table td.cat-additional { background: #e8f4fd; }
 
-    .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-50); box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
+    .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-100); }
 
-    .billing-table td.has-note { position: relative; z-index: 0; }
-    .billing-table td.has-note::after {
-      content: ''; position: absolute; top: 3px; right: 3px;
-      width: 6px; height: 6px; border-radius: 50%; background: var(--color-info);
+    .billing-table td.has-note .note-dot {
+      display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--color-info); vertical-align: top; margin-left: 2px;
     }
     .note-tip {
-      display: none; position: absolute; bottom: calc(100% + 4px); right: 0;
+      display: none; position: fixed;
       background: #1a1a2e; color: #fff; font-family: var(--font-ui); font-size: 11px;
       font-style: normal; white-space: normal; max-width: 200px;
-      padding: 6px 10px; border-radius: var(--radius); z-index: 10;
+      padding: 6px 10px; border-radius: var(--radius); z-index: 100;
       pointer-events: none; line-height: 1.4;
     }
-    .billing-table td.has-note:hover { z-index: 1; }
-    .billing-table td.has-note:hover .note-tip { display: block; }
 
     .zone-notes-btn {
       font-size: 9px; font-weight: 400; opacity: 0.85; margin-left: 12px;
@@ -445,10 +441,23 @@
           if (row.notes[col]) {
             hasNotes = true;
             td.classList.add('has-note');
+            var dot = document.createElement('span');
+            dot.className = 'note-dot';
+            td.appendChild(dot);
             var tip = document.createElement('span');
             tip.className = 'note-tip';
             tip.textContent = row.notes[col];
             td.appendChild(tip);
+            td.addEventListener('mouseenter', function() {
+              var rect = this.getBoundingClientRect();
+              var tipEl = this.querySelector('.note-tip');
+              tipEl.style.display = 'block';
+              tipEl.style.left = rect.left + 'px';
+              tipEl.style.top = (rect.top - tipEl.offsetHeight - 4) + 'px';
+            });
+            td.addEventListener('mouseleave', function() {
+              this.querySelector('.note-tip').style.display = 'none';
+            });
           }
           tr.appendChild(td);
         });
