@@ -15,11 +15,9 @@
       letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-gray-500);
       background: var(--color-gray-100); position: sticky; top: 0; z-index: 2;
     }
-    .billing-table .sticky-col { position: sticky; background: var(--color-white); z-index: 4; }
+    .billing-table .sticky-col { position: sticky; left: 0; background: var(--color-white); z-index: 4; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
     .billing-table th.sticky-col { z-index: 5; background: var(--color-gray-100); }
-    .billing-table .col-account { left: 0; min-width: 140px; }
-    .billing-table .col-area { left: 140px; min-width: 90px; }
-    .billing-table .col-type { left: 230px; min-width: 60px; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
+    .billing-table .col-account { min-width: 140px; }
     .billing-table td.amount { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; }
     .billing-table td.amount.has-value { background: #f0faf4; }
     .billing-table tr:hover td.sticky-col { background: var(--color-gray-100); }
@@ -267,7 +265,7 @@
       var tr = document.createElement('tr');
       ['Account', 'Area', 'Type'].forEach(function(label, i) {
         var th = document.createElement('th');
-        th.className = 'sticky-col col-' + ['account', 'area', 'type'][i];
+        if (i === 0) th.className = 'sticky-col col-account';
         th.textContent = label;
         tr.appendChild(th);
       });
@@ -306,13 +304,10 @@
           ztr.className = 'zone-group-row';
           ztr.setAttribute('data-zone', zoneName);
 
-          // Zone label spanning account + area + type columns — sticky
+          // Zone label — full width, no totals
           var ztd = document.createElement('td');
-          ztd.colSpan = 3;
+          ztd.colSpan = cols.length + 3;
           ztd.style.background = bgCol;
-          ztd.style.position = 'sticky';
-          ztd.style.left = '0';
-          ztd.style.zIndex = '4';
           var toggle = document.createElement('span');
           toggle.className = 'zone-toggle';
           toggle.textContent = '\u25BC';
@@ -376,19 +371,6 @@
           });
           ztd.appendChild(notesBtn);
           ztr.appendChild(ztd);
-
-          // One cell per month column with zone total
-          cols.forEach(function(col) {
-            var td = document.createElement('td');
-            td.style.background = bgCol;
-            td.style.textAlign = 'right';
-            td.style.fontFamily = "'SF Mono', 'Fira Code', monospace";
-            var val = zt[col] || 0;
-            if (val) {
-              td.textContent = val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-            }
-            ztr.appendChild(td);
-          });
           ztr.addEventListener('click', function() {
             ztr.classList.toggle('collapsed');
             var hide = ztr.classList.contains('collapsed');
@@ -407,6 +389,39 @@
             }
           });
           tbody.appendChild(ztr);
+
+          // Zone totals row — first row in each group
+          var ztotalTr = document.createElement('tr');
+          ztotalTr.className = 'zone-totals-row';
+          ztotalTr.setAttribute('data-zone', zoneName);
+          var ztotalLabel = document.createElement('td');
+          ztotalLabel.className = 'sticky-col col-account';
+          ztotalLabel.textContent = zoneName + ' Total';
+          ztotalLabel.style.fontWeight = '600';
+          ztotalLabel.style.fontSize = '9px';
+          ztotalLabel.style.color = 'var(--color-gray-600)';
+          ztotalLabel.style.background = 'var(--color-gray-100)';
+          ztotalTr.appendChild(ztotalLabel);
+          // Empty area + type cells
+          var ztotalArea = document.createElement('td');
+          ztotalArea.style.background = 'var(--color-gray-100)';
+          ztotalTr.appendChild(ztotalArea);
+          var ztotalType = document.createElement('td');
+          ztotalType.style.background = 'var(--color-gray-100)';
+          ztotalTr.appendChild(ztotalType);
+          // Month totals
+          cols.forEach(function(col) {
+            var td = document.createElement('td');
+            td.className = 'amount';
+            td.style.fontWeight = '600';
+            td.style.background = 'var(--color-gray-100)';
+            var val = zt[col] || 0;
+            if (val) {
+              td.textContent = val.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            }
+            ztotalTr.appendChild(td);
+          });
+          tbody.appendChild(ztotalTr);
         }
 
         var tr = document.createElement('tr');
@@ -420,13 +435,11 @@
         tr.appendChild(tdAcct);
 
         var tdArea = document.createElement('td');
-        tdArea.className = 'sticky-col col-area';
         if (row.category === 'additional') tdArea.classList.add('cat-additional');
         tdArea.textContent = row.area;
         tr.appendChild(tdArea);
 
         var tdType = document.createElement('td');
-        tdType.className = 'sticky-col col-type';
         if (row.category === 'additional') tdType.classList.add('cat-additional');
         tdType.textContent = row.type;
         tr.appendChild(tdType);
@@ -473,11 +486,12 @@
           notesTr.setAttribute('data-zone', row.zone || 'No Zone');
           notesTr.style.display = 'none';
           var noteLabel = document.createElement('td');
-          noteLabel.colSpan = 3;
           noteLabel.className = 'sticky-col col-account';
           noteLabel.style.cssText = 'font-size:9px;color:var(--color-gray-400);font-style:italic;';
           noteLabel.textContent = 'Notes';
           notesTr.appendChild(noteLabel);
+          notesTr.appendChild(document.createElement('td'));
+          notesTr.appendChild(document.createElement('td'));
           cols.forEach(function(col) {
             var td = document.createElement('td');
             td.style.cssText = 'font-size:9px;color:var(--color-info);font-style:italic;white-space:normal;max-width:80px;';
