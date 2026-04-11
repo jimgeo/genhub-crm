@@ -98,7 +98,7 @@
       <div class="page-header">
         <div>
           <h1 class="page-title">Xero Contact Matching</h1>
-          <p style="font-size:13px;color:var(--color-gray-500);">Match Xero contacts to CRM accounts for invoice display</p>
+          <p style="font-size:13px;color:var(--color-gray-500);">CRM accounts matched to Xero contacts for invoice display</p>
         </div>
         <div>
           <span class="xero-stats" id="stats"></span>
@@ -106,7 +106,7 @@
       </div>
 
       <div class="toolbar">
-        <input type="text" class="search-input" id="search" placeholder="Search contacts...">
+        <input type="text" class="search-input" id="search" placeholder="Search accounts...">
         <select class="form-select" id="filter-match" style="width:auto;">
           <option value="">All</option>
           <option value="exact">Exact Match</option>
@@ -120,10 +120,10 @@
           <table>
             <thead>
               <tr>
-                <th>Xero Contact</th>
+                <th>CRM Account</th>
                 <th>Type</th>
                 <th>Match</th>
-                <th>CRM Account</th>
+                <th>Xero Contact</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -139,9 +139,9 @@
   <!-- Link Modal -->
   <div id="link-modal">
     <div class="modal-box">
-      <h3 id="modal-title">Link to CRM Account</h3>
+      <h3 id="modal-title">Link to Xero Contact</h3>
       <div class="modal-sub" id="modal-sub"></div>
-      <input type="text" class="modal-search" id="modal-search" placeholder="Search accounts...">
+      <input type="text" class="modal-search" id="modal-search" placeholder="Search Xero contacts...">
       <ul class="modal-account-list" id="modal-account-list"></ul>
       <div style="text-align:right;">
         <button class="btn btn-sm" onclick="closeModal()">Cancel</button>
@@ -157,7 +157,7 @@
     let xeroContacts = [];
     let crmAccounts = [];
     let matchedData = [];
-    let currentXeroContact = null;
+    let currentItem = null;
 
     async function loadData() {
       const tbody = document.getElementById('contacts-tbody');
@@ -188,13 +188,13 @@
         xeroContacts = xeroData.contacts || [];
         crmAccounts = accountsRaw.filter(a => a.is_deleted !== 'TRUE');
 
-        // Build match data
-        matchedData = xeroContacts.map(xc => {
-          const result = findMatch(xc.name, crmAccounts);
+        // Build match data — CRM accounts as primary
+        matchedData = crmAccounts.map(acct => {
+          const result = findMatch(acct.name, xeroContacts);
           return {
-            xero: xc,
+            account: acct,
             matchType: result.type,
-            crmAccount: result.account,
+            xeroContact: result.contact,
             score: result.score
           };
         });
@@ -219,51 +219,51 @@
       }
     }
 
-    function findMatch(xeroName, accounts) {
-      if (!xeroName) return { type: 'none', account: null, score: 0 };
+    function findMatch(accountName, contacts) {
+      if (!accountName) return { type: 'none', contact: null, score: 0 };
 
-      const xeroLower = xeroName.toLowerCase().trim();
+      const acctLower = accountName.toLowerCase().trim();
 
       // Exact match
-      const exact = accounts.find(a => (a.name || '').toLowerCase().trim() === xeroLower);
-      if (exact) return { type: 'exact', account: exact, score: 1 };
+      const exact = contacts.find(c => (c.name || '').toLowerCase().trim() === acctLower);
+      if (exact) return { type: 'exact', contact: exact, score: 1 };
 
-      // Close match — check if one contains the other, or similar
+      // Close match
       let bestMatch = null;
       let bestScore = 0;
 
-      for (const acct of accounts) {
-        const acctLower = (acct.name || '').toLowerCase().trim();
-        if (!acctLower) continue;
+      for (const xc of contacts) {
+        const xcLower = (xc.name || '').toLowerCase().trim();
+        if (!xcLower) continue;
 
         // Contains match
-        if (xeroLower.includes(acctLower) || acctLower.includes(xeroLower)) {
-          const score = Math.min(xeroLower.length, acctLower.length) / Math.max(xeroLower.length, acctLower.length);
+        if (acctLower.includes(xcLower) || xcLower.includes(acctLower)) {
+          const score = Math.min(acctLower.length, xcLower.length) / Math.max(acctLower.length, xcLower.length);
           if (score > bestScore) {
             bestScore = score;
-            bestMatch = acct;
+            bestMatch = xc;
           }
         }
 
         // Word overlap match
-        const xeroWords = xeroLower.split(/\s+/);
         const acctWords = acctLower.split(/\s+/);
-        const overlap = xeroWords.filter(w => acctWords.includes(w) && w.length > 2).length;
-        const totalWords = Math.max(xeroWords.length, acctWords.length);
+        const xcWords = xcLower.split(/\s+/);
+        const overlap = acctWords.filter(w => xcWords.includes(w) && w.length > 2).length;
+        const totalWords = Math.max(acctWords.length, xcWords.length);
         if (totalWords > 0) {
           const wordScore = overlap / totalWords;
           if (wordScore > 0.4 && wordScore > bestScore) {
             bestScore = wordScore;
-            bestMatch = acct;
+            bestMatch = xc;
           }
         }
       }
 
       if (bestMatch && bestScore > 0.3) {
-        return { type: 'close', account: bestMatch, score: bestScore };
+        return { type: 'close', contact: bestMatch, score: bestScore };
       }
 
-      return { type: 'none', account: null, score: 0 };
+      return { type: 'none', contact: null, score: 0 };
     }
 
     function updateStats() {
@@ -271,7 +271,7 @@
       const close = matchedData.filter(d => d.matchType === 'close').length;
       const none = matchedData.filter(d => d.matchType === 'none').length;
       const el = document.getElementById('stats');
-      el.textContent = matchedData.length + ' contacts | ' + exact + ' matched | ' + close + ' close | ' + none + ' unmatched';
+      el.textContent = matchedData.length + ' accounts | ' + exact + ' matched | ' + close + ' close | ' + none + ' unmatched';
     }
 
     function wireControls() {
@@ -291,8 +291,8 @@
 
       if (query) {
         filtered = filtered.filter(d =>
-          d.xero.name.toLowerCase().includes(query) ||
-          (d.crmAccount && (d.crmAccount.name || '').toLowerCase().includes(query))
+          (d.account.name || '').toLowerCase().includes(query) ||
+          (d.xeroContact && (d.xeroContact.name || '').toLowerCase().includes(query))
         );
       }
 
@@ -308,7 +308,7 @@
         const td = document.createElement('td');
         td.setAttribute('colspan', '5');
         td.className = 'empty-state';
-        td.textContent = 'No contacts match filters';
+        td.textContent = 'No accounts match filters';
         tr.appendChild(td);
         tbody.appendChild(tr);
         return;
@@ -317,18 +317,20 @@
       for (const item of data) {
         const tr = document.createElement('tr');
 
-        // Xero Contact name
+        // CRM Account name
         const tdName = document.createElement('td');
-        tdName.style.fontWeight = '600';
-        tdName.textContent = item.xero.name;
+        const nameLink = document.createElement('a');
+        nameLink.href = 'account-detail.html?id=' + encodeURIComponent(item.account.account_id);
+        nameLink.textContent = item.account.name || '(unnamed)';
+        nameLink.style.fontWeight = '600';
+        nameLink.style.color = 'var(--color-info)';
+        nameLink.style.textDecoration = 'none';
+        tdName.appendChild(nameLink);
         tr.appendChild(tdName);
 
-        // Type (customer/supplier)
+        // Account type
         const tdType = document.createElement('td');
-        const types = [];
-        if (item.xero.isCustomer) types.push('Customer');
-        if (item.xero.isSupplier) types.push('Supplier');
-        tdType.textContent = types.join(', ') || '';
+        tdType.textContent = item.account.type || '';
         tdType.style.fontSize = '12px';
         tdType.style.color = 'var(--color-gray-500)';
         tr.appendChild(tdType);
@@ -350,20 +352,15 @@
         tdMatch.appendChild(badge);
         tr.appendChild(tdMatch);
 
-        // CRM Account
-        const tdCrm = document.createElement('td');
-        if (item.crmAccount) {
-          const link = document.createElement('a');
-          link.href = 'account-detail.html?id=' + encodeURIComponent(item.crmAccount.account_id);
-          link.textContent = item.crmAccount.name;
-          link.style.color = 'var(--color-info)';
-          link.style.textDecoration = 'none';
-          tdCrm.appendChild(link);
+        // Xero Contact
+        const tdXero = document.createElement('td');
+        if (item.xeroContact) {
+          tdXero.textContent = item.xeroContact.name;
         } else {
-          tdCrm.textContent = '—';
-          tdCrm.style.color = 'var(--color-gray-400)';
+          tdXero.textContent = '—';
+          tdXero.style.color = 'var(--color-gray-400)';
         }
-        tr.appendChild(tdCrm);
+        tr.appendChild(tdXero);
 
         // Actions
         const tdActions = document.createElement('td');
@@ -374,40 +371,31 @@
           linkBtn.addEventListener('click', function() { openLinkModal(item); });
           tdActions.appendChild(linkBtn);
         }
-        if (item.crmAccount) {
-          const viewBtn = document.createElement('a');
-          viewBtn.href = 'account-detail.html?id=' + encodeURIComponent(item.crmAccount.account_id);
-          viewBtn.className = 'btn btn-sm';
-          viewBtn.textContent = 'View';
-          viewBtn.style.marginLeft = '4px';
-          tdActions.appendChild(viewBtn);
-        }
         tr.appendChild(tdActions);
 
         tbody.appendChild(tr);
       }
     }
 
-    /* ---- Link Modal ---- */
+    /* ---- Link Modal — pick a Xero contact ---- */
     function openLinkModal(item) {
-      currentXeroContact = item;
+      currentItem = item;
       const modal = document.getElementById('link-modal');
       const title = document.getElementById('modal-title');
       const sub = document.getElementById('modal-sub');
       const searchInput = document.getElementById('modal-search');
 
-      title.textContent = 'Link "' + item.xero.name + '"';
-      sub.textContent = 'Select the CRM account this Xero contact belongs to';
+      title.textContent = 'Link "' + item.account.name + '"';
+      sub.textContent = 'Select the Xero contact this CRM account belongs to';
       searchInput.value = '';
 
       modal.classList.add('active');
-      renderModalAccounts('');
+      renderModalList('');
 
       searchInput.addEventListener('input', function() {
-        renderModalAccounts(this.value);
+        renderModalList(this.value);
       });
 
-      // Close on backdrop click
       modal.addEventListener('click', function(e) {
         if (e.target === modal) closeModal();
       });
@@ -415,27 +403,26 @@
       searchInput.focus();
     }
 
-    function renderModalAccounts(query) {
+    function renderModalList(query) {
       const list = document.getElementById('modal-account-list');
       list.textContent = '';
 
       const q = query.toLowerCase().trim();
-      let filtered = crmAccounts;
+      let filtered = xeroContacts;
       if (q) {
-        filtered = filtered.filter(a => (a.name || '').toLowerCase().includes(q));
+        filtered = filtered.filter(c => (c.name || '').toLowerCase().includes(q));
       }
 
-      // Show max 20
-      filtered.slice(0, 20).forEach(acct => {
+      filtered.slice(0, 20).forEach(xc => {
         const li = document.createElement('li');
-        li.textContent = acct.name || '(unnamed)';
-        li.addEventListener('click', function() { linkContact(acct); });
+        li.textContent = xc.name || '(unnamed)';
+        li.addEventListener('click', function() { linkToXero(xc); });
         list.appendChild(li);
       });
 
       if (filtered.length === 0) {
         const li = document.createElement('li');
-        li.textContent = 'No accounts found';
+        li.textContent = 'No Xero contacts found';
         li.style.color = 'var(--color-gray-400)';
         li.style.cursor = 'default';
         list.appendChild(li);
@@ -451,24 +438,23 @@
       }
     }
 
-    function linkContact(crmAccount) {
-      if (!currentXeroContact) return;
+    function linkToXero(xeroContact) {
+      if (!currentItem) return;
 
-      // Update the match data in memory
-      currentXeroContact.matchType = 'exact';
-      currentXeroContact.crmAccount = crmAccount;
-      currentXeroContact.score = 1;
+      currentItem.matchType = 'exact';
+      currentItem.xeroContact = xeroContact;
+      currentItem.score = 1;
 
       closeModal();
       updateStats();
       applyFilters();
 
-      showToast('Linked "' + currentXeroContact.xero.name + '" to "' + crmAccount.name + '"');
+      showToast('Linked "' + currentItem.account.name + '" to "' + xeroContact.name + '"');
     }
 
     function closeModal() {
       document.getElementById('link-modal').classList.remove('active');
-      currentXeroContact = null;
+      currentItem = null;
     }
 
     (async function() {
