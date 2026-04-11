@@ -306,10 +306,13 @@
           ztr.className = 'zone-group-row';
           ztr.setAttribute('data-zone', zoneName);
 
-          // Zone label spanning account + area columns
+          // Zone label spanning account + area + type columns — sticky
           var ztd = document.createElement('td');
           ztd.colSpan = 3;
           ztd.style.background = bgCol;
+          ztd.style.position = 'sticky';
+          ztd.style.left = '0';
+          ztd.style.zIndex = '4';
           var toggle = document.createElement('span');
           toggle.className = 'zone-toggle';
           toggle.textContent = '\u25BC';
