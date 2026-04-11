@@ -3,7 +3,8 @@ export async function onRequest(context) {
   return new Response(JSON.stringify({
     API_KEY: env.API_KEY,
     SPREADSHEET_ID: env.SPREADSHEET_ID,
-    WRITE_PROXY_URL: env.WRITE_PROXY_URL
+    WRITE_PROXY_URL: env.WRITE_PROXY_URL,
+    XERO_CLIENT_ID: env.XERO_CLIENT_ID || null
   }), {
     headers: { 'Content-Type': 'application/json' }
   });

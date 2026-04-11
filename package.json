@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npx wrangler pages dev . --port 8787"
+    "dev": "npx wrangler pages dev . --port 8787 --kv XERO_TOKENS"
   },
   "devDependencies": {
     "wrangler": "^4.73.0"

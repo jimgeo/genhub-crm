@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .doc-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+    }
+    .doc-card + .doc-card { margin-top: 12px; }
+    .doc-title {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-black);
+    }
+    .doc-desc {
+      font-family: var(--font-body);
+      font-size: 12px;
+      color: var(--color-gray-400);
+      margin-top: 2px;
+    }
+    .doc-links {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+      margin-left: 16px;
+    }
+
+    /* Markdown viewer */
+    .md-viewer {
+      display: none;
+      margin-top: 24px;
+    }
+    .md-viewer.active { display: block; }
+    .md-viewer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--color-gray-100);
+      border: 1px solid var(--color-gray-200);
+      border-bottom: none;
+      border-radius: var(--radius) var(--radius) 0 0;
+    }
+    .md-viewer-title {
+      font-family: var(--font-ui);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--color-black);
+    }
+    .md-viewer-content {
+      padding: 24px;
+      border: 1px solid var(--color-gray-200);
+      border-radius: 0 0 var(--radius) var(--radius);
+      background: var(--color-white);
+      font-family: var(--font-body);
+      font-size: 14px;
+      line-height: 1.7;
+      color: var(--color-body-text);
+      overflow-x: auto;
+    }
+    .md-viewer-content h1 { font-family: var(--font-heading); font-size: 22px; font-weight: 700; margin: 0 0 16px; color: var(--color-black); }
+    .md-viewer-content h2 { font-family: var(--font-heading); font-size: 17px; font-weight: 700; margin: 28px 0 12px; color: var(--color-black); border-bottom: 1px solid var(--color-gray-200); padding-bottom: 6px; }
+    .md-viewer-content h3 { font-family: var(--font-ui); font-size: 14px; font-weight: 600; margin: 20px 0 8px; color: var(--color-black); }
+    .md-viewer-content p { margin: 0 0 12px; }
+    .md-viewer-content ul, .md-viewer-content ol { margin: 0 0 12px; padding-left: 24px; }
+    .md-viewer-content li { margin-bottom: 4px; }
+    .md-viewer-content code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; background: var(--color-gray-100); padding: 2px 6px; border-radius: 3px; }
+    .md-viewer-content pre { background: var(--color-gray-100); padding: 16px; border-radius: var(--radius); overflow-x: auto; margin: 0 0 12px; }
+    .md-viewer-content pre code { background: none; padding: 0; font-size: 12px; line-height: 1.6; }
+    .md-viewer-content table { border-collapse: collapse; width: 100%; margin: 0 0 12px; font-size: 13px; }
+    .md-viewer-content table th, .md-viewer-content table td { border: 1px solid var(--color-gray-200); padding: 8px 12px; text-align: left; }
+    .md-viewer-content table th { background: var(--color-gray-100); font-weight: 600; }
+    .md-viewer-content a { color: var(--color-info); text-decoration: none; }
+    .md-viewer-content a:hover { text-decoration: underline; }
+    .md-viewer-content strong { font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="page-header">
+        <h1 class="page-title">Admin</h1>
+      </div>
+
+      <!-- Xero Integration -->
+      <div class="card" style="max-width:800px; margin-bottom:24px;">
+        <div class="section-title">Xero Integration</div>
+        <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+          Connect to Xero for read-only access to invoices and contacts.
+        </p>
+        <div class="doc-card" id="xero-status-card">
+          <div>
+            <div class="doc-title" id="xero-status-title">Checking connection...</div>
+            <div class="doc-desc" id="xero-status-desc">Loading Xero status</div>
+          </div>
+          <div class="doc-links" id="xero-actions">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Documentation -->
+      <div class="card" style="max-width:800px;">
+        <div class="section-title">Documentation</div>
+        <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+          Setup guides, specs, and reference docs.
+        </p>
+
+        <div class="doc-card">
+          <div>
+            <div class="doc-title">Cloudflare Pages & Access Setup</div>
+            <div class="doc-desc">Deployment, env vars, Google OAuth and Access policies</div>
+          </div>
+          <div class="doc-links">
+            <a href="#" class="btn btn-sm" onclick="viewDoc('docs/cloudflare-setup.md', 'Cloudflare Pages & Access Setup'); return false;">View</a>
+            <a href="docs/cloudflare-setup.md" target="_blank" class="btn btn-sm btn-secondary">Raw</a>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div>
+            <div class="doc-title">Xero API Setup</div>
+            <div class="doc-desc">Xero app registration, OAuth 2.0 flow, API endpoints, and architecture</div>
+          </div>
+          <div class="doc-links">
+            <a href="#" class="btn btn-sm" onclick="viewDoc('docs/xero-api-setup.md', 'Xero API Setup'); return false;">View</a>
+            <a href="docs/xero-api-setup.md" target="_blank" class="btn btn-sm btn-secondary">Raw</a>
+          </div>
+        </div>
+
+        <div class="doc-card">
+          <div>
+            <div class="doc-title">Development Standards</div>
+            <div class="doc-desc">Coding conventions, UI patterns, soft deletes, audit fields</div>
+          </div>
+          <div class="doc-links">
+            <a href="#" class="btn btn-sm" onclick="viewDoc('docs/STANDARDS.md', 'Development Standards'); return false;">View</a>
+            <a href="docs/STANDARDS.md" target="_blank" class="btn btn-sm btn-secondary">Raw</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Markdown Viewer -->
+      <div class="md-viewer" id="md-viewer" style="max-width:800px;">
+        <div class="card" style="padding:0; overflow:hidden;">
+          <div class="md-viewer-header">
+            <span class="md-viewer-title" id="md-viewer-title"></span>
+            <button class="btn btn-sm" onclick="closeDoc()">Close</button>
+          </div>
+          <div class="md-viewer-content" id="md-viewer-content"></div>
+        </div>
+      </div>
+
+      <!-- Data Utilities -->
+      <div class="card" style="max-width:800px; margin-top:24px;">
+        <div class="section-title">Data Utilities</div>
+        <p style="font-size:13px;color:var(--color-gray-500);margin-bottom:16px;">
+          One-time utilities for data maintenance. Use with care.
+        </p>
+        <div class="doc-card">
+          <div>
+            <div class="doc-title">Backfill Area IDs</div>
+            <div class="doc-desc">Generate unique area_id for any Area rows missing one</div>
+          </div>
+          <div class="doc-links">
+            <button class="btn btn-sm" onclick="runBackfillAreaIds()">Run</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/areas.js"></script>
+  <script>
+    async function runBackfillAreaIds() {
+      await CONFIG.initSecrets();
+      await backfillAreaIds();
+    }
+
+    /* ---- Simple Markdown to HTML renderer ---- */
+    // Note: all markdown is fetched from our own trusted docs/ directory.
+    // No user-supplied content is rendered.
+    function mdToHtml(md) {
+      let html = md;
+
+      // Code blocks (``` ... ```) — process before inline rules
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+        const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<pre><code>' + escaped + '</code></pre>';
+      });
+
+      const lines = html.split('\n');
+      let result = [];
+      let inList = false;
+      let listType = '';
+      let inTable = false;
+      let tableRows = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+
+        // Skip lines inside pre blocks (already handled)
+        if (line.includes('<pre>') || line.includes('</pre>')) {
+          if (inList) { result.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+          if (inTable) { result.push(renderTable(tableRows)); inTable = false; tableRows = []; }
+          result.push(line);
+          continue;
+        }
+
+        // Table rows
+        if (line.trim().startsWith('|') && line.trim().endsWith('|')) {
+          if (inList) { result.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+          if (line.match(/^\|[\s\-:|]+\|$/)) {
+            if (!inTable) { inTable = true; }
+            continue;
+          }
+          if (!inTable) inTable = true;
+          tableRows.push(line);
+          continue;
+        } else if (inTable) {
+          result.push(renderTable(tableRows));
+          inTable = false;
+          tableRows = [];
+        }
+
+        // Headers
+        if (line.startsWith('# ')) {
+          if (inList) { result.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+          result.push('<h1>' + inlineFormat(line.slice(2)) + '</h1>');
+          continue;
+        }
+        if (line.startsWith('## ')) {
+          if (inList) { result.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+          result.push('<h2>' + inlineFormat(line.slice(3)) + '</h2>');
+          continue;
+        }
+        if (line.startsWith('### ')) {
+          if (inList) { result.push(listType === 'ul' ? '</ul>' : '</ol>'); inList = false; }
+          result.push('<h3>' + inlineFormat(line.slice(4)) + '</h3>');
+          continue;
+        }
+
+        // Checkbox list items
+        if (line.match(/^\s*-\s*\[[ x]\]/)) {
+          if (!inList || listType !== 'cb') {
+            if (inList) result.push(listType === 'ul' ? '</ul>' : '</ol>');
+            result.push('<ul style="list-style:none;padding-left:8px;">');
+            inList = true;
+            listType = 'cb';
+          }
+          const checked = line.includes('[x]');
+          const text = line.replace(/^\s*-\s*\[[ x]\]\s*/, '');
+          const icon = checked ? '&#9745;' : '&#9744;';
+          result.push('<li>' + icon + ' ' + inlineFormat(text) + '</li>');
+          continue;
+        }
+
+        // Unordered list
+        if (line.match(/^\s*[-*]\s/)) {
+          if (!inList || listType !== 'ul') {
+            if (inList) result.push(listType === 'ul' ? '</ul>' : listType === 'cb' ? '</ul>' : '</ol>');
+            result.push('<ul>');
+            inList = true;
+            listType = 'ul';
+          }
+          result.push('<li>' + inlineFormat(line.replace(/^\s*[-*]\s/, '')) + '</li>');
+          continue;
+        }
+
+        // Ordered list
+        if (line.match(/^\s*\d+\.\s/)) {
+          if (!inList || listType !== 'ol') {
+            if (inList) result.push(listType === 'ol' ? '</ol>' : '</ul>');
+            result.push('<ol>');
+            inList = true;
+            listType = 'ol';
+          }
+          result.push('<li>' + inlineFormat(line.replace(/^\s*\d+\.\s/, '')) + '</li>');
+          continue;
+        }
+
+        // Close list on empty line
+        if (inList && line.trim() === '') {
+          result.push(listType === 'ol' ? '</ol>' : '</ul>');
+          inList = false;
+        }
+
+        if (line.trim() === '') continue;
+
+        // Paragraph
+        result.push('<p>' + inlineFormat(line) + '</p>');
+      }
+
+      if (inList) result.push(listType === 'ol' ? '</ol>' : '</ul>');
+      if (inTable) result.push(renderTable(tableRows));
+
+      return result.join('\n');
+    }
+
+    function renderTable(rows) {
+      if (rows.length === 0) return '';
+      let html = '<table><thead><tr>';
+      const headerCells = rows[0].split('|').map(c => c.trim()).filter(Boolean);
+      headerCells.forEach(c => { html += '<th>' + inlineFormat(c) + '</th>'; });
+      html += '</tr></thead><tbody>';
+      for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i].split('|').map(c => c.trim()).filter(Boolean);
+        html += '<tr>';
+        cells.forEach(c => { html += '<td>' + inlineFormat(c) + '</td>'; });
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function inlineFormat(text) {
+      // Escape HTML entities first (trusted source but good practice)
+      text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      // Inline code
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // Bold
+      text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      // Italic
+      text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      // Links — safe: href from trusted docs, target=_blank with rel for safety
+      text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return text;
+    }
+
+    /* ---- Document viewer ---- */
+    async function viewDoc(path, title) {
+      const viewer = document.getElementById('md-viewer');
+      const titleEl = document.getElementById('md-viewer-title');
+      const contentEl = document.getElementById('md-viewer-content');
+
+      titleEl.textContent = title;
+      contentEl.textContent = 'Loading...';
+      viewer.classList.add('active');
+
+      try {
+        const resp = await fetch(path);
+        const text = await resp.text();
+        // Safe: content is from our own trusted docs/ directory, not user input
+        contentEl.innerHTML = mdToHtml(text);  // eslint-disable-line no-unsanitized/property
+      } catch (err) {
+        contentEl.textContent = 'Failed to load document.';
+      }
+
+      viewer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    function closeDoc() {
+      document.getElementById('md-viewer').classList.remove('active');
+    }
+
+    /* ---- Xero connection status ---- */
+    async function checkXeroStatus() {
+      const titleEl = document.getElementById('xero-status-title');
+      const descEl = document.getElementById('xero-status-desc');
+      const actionsEl = document.getElementById('xero-actions');
+
+      // Check for redirect params from OAuth flow
+      const params = new URLSearchParams(window.location.search);
+      const xeroResult = params.get('xero');
+      if (xeroResult === 'connected') {
+        descEl.textContent = 'Successfully connected to Xero!';
+        descEl.style.color = 'var(--color-success)';
+        // Clean up URL
+        history.replaceState(null, '', window.location.pathname);
+      } else if (xeroResult === 'denied') {
+        descEl.textContent = 'Xero access was denied.';
+        descEl.style.color = 'var(--color-danger)';
+        history.replaceState(null, '', window.location.pathname);
+      } else if (xeroResult) {
+        descEl.textContent = 'Xero connection failed: ' + xeroResult;
+        descEl.style.color = 'var(--color-danger)';
+        history.replaceState(null, '', window.location.pathname);
+      }
+
+      try {
+        const resp = await fetch('/api/xero/status');
+        const data = await resp.json();
+
+        if (data.connected) {
+          titleEl.textContent = 'Connected to Xero';
+          if (!xeroResult) {
+            descEl.textContent = data.tenantName
+              ? 'Organisation: ' + data.tenantName
+              : 'Xero is connected and ready';
+            descEl.style.color = 'var(--color-success)';
+          }
+          const btn = document.createElement('a');
+          btn.href = '#';
+          btn.className = 'btn btn-sm';
+          btn.textContent = 'Reconnect';
+          btn.addEventListener('click', function(e) { e.preventDefault(); window.location.href = '/api/xero/auth'; });
+          actionsEl.appendChild(btn);
+        } else {
+          titleEl.textContent = 'Not Connected';
+          if (!xeroResult) {
+            descEl.textContent = 'Click Connect to link your Xero account (read-only access)';
+            descEl.style.color = '';
+          }
+          const btn = document.createElement('a');
+          btn.href = '/api/xero/auth';
+          btn.className = 'btn btn-sm btn-primary';
+          btn.textContent = 'Connect to Xero';
+          actionsEl.appendChild(btn);
+        }
+      } catch (err) {
+        titleEl.textContent = 'Status Unavailable';
+        descEl.textContent = 'Could not check Xero connection status';
+        descEl.style.color = '';
+      }
+    }
+
+    (async function() {
+      await initApp();
+      checkXeroStatus();
+    })();
+  </script>
+</body>
+</html>

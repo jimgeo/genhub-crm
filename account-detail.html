@@ -206,6 +206,31 @@
         </div>
       </div>
 
+      <!-- Xero Invoices -->
+      <div class="linked-section" id="xero-invoices-section" style="display:none;margin-top:32px;">
+        <div class="linked-header">
+          <h3 class="card-title">Xero Invoices</h3>
+          <span id="xero-invoice-status" style="font-size:11px;color:var(--color-gray-400);"></span>
+        </div>
+        <div class="table-wrapper">
+          <table class="pay-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Due Date</th>
+                <th>Reference</th>
+                <th>Status</th>
+                <th style="text-align:right;">Total</th>
+                <th style="text-align:right;">Paid</th>
+                <th style="text-align:right;">Due</th>
+              </tr>
+            </thead>
+            <tbody id="xero-invoices-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Payment Summary -->
       <div class="linked-section" id="payments-section" style="display:none;margin-top:32px;">
         <div class="linked-header">
@@ -255,10 +280,117 @@
       }
     }
 
+    /* ---- Xero Invoices ---- */
+    async function loadXeroInvoices(accountName) {
+      if (!accountName) return;
+
+      try {
+        // Check if Xero is connected
+        const statusResp = await fetch('/api/xero/status');
+        const statusData = await statusResp.json();
+        if (!statusData.connected) return;
+
+        // Show the section
+        const section = document.getElementById('xero-invoices-section');
+        section.style.display = '';
+
+        const tbody = document.getElementById('xero-invoices-tbody');
+        const statusEl = document.getElementById('xero-invoice-status');
+        statusEl.textContent = 'Loading...';
+
+        const resp = await fetch('/api/xero/invoices?contact=' + encodeURIComponent(accountName));
+        const data = await resp.json();
+
+        if (data.error) {
+          statusEl.textContent = data.error;
+          return;
+        }
+
+        const invoices = data.invoices || [];
+        statusEl.textContent = invoices.length + ' invoice' + (invoices.length !== 1 ? 's' : '');
+
+        if (invoices.length === 0) {
+          tbody.textContent = '';
+          const tr = document.createElement('tr');
+          const td = document.createElement('td');
+          td.setAttribute('colspan', '8');
+          td.className = 'empty-state';
+          td.textContent = 'No invoices found in Xero for this account';
+          tr.appendChild(td);
+          tbody.appendChild(tr);
+          return;
+        }
+
+        tbody.textContent = '';
+        for (const inv of invoices) {
+          const tr = document.createElement('tr');
+
+          const tdNum = document.createElement('td');
+          tdNum.textContent = inv.invoiceNumber || '';
+          tdNum.style.fontWeight = '600';
+          tr.appendChild(tdNum);
+
+          const tdDate = document.createElement('td');
+          tdDate.textContent = inv.date ? inv.date.substring(0, 10) : '';
+          tr.appendChild(tdDate);
+
+          const tdDue = document.createElement('td');
+          tdDue.textContent = inv.dueDate ? inv.dueDate.substring(0, 10) : '';
+          tr.appendChild(tdDue);
+
+          const tdRef = document.createElement('td');
+          tdRef.textContent = inv.reference || '';
+          tr.appendChild(tdRef);
+
+          const tdStatus = document.createElement('td');
+          const badge = document.createElement('span');
+          badge.className = 'badge';
+          badge.textContent = inv.status;
+          if (inv.status === 'PAID') { badge.style.background = '#dcfce7'; badge.style.color = '#15803d'; }
+          else if (inv.status === 'AUTHORISED') { badge.style.background = '#dbeafe'; badge.style.color = '#1e40af'; }
+          else if (inv.status === 'OVERDUE' || inv.status === 'DRAFT') { badge.style.background = '#fef3c7'; badge.style.color = '#92400e'; }
+          tdStatus.appendChild(badge);
+          tr.appendChild(tdStatus);
+
+          const tdTotal = document.createElement('td');
+          tdTotal.className = 'amount';
+          tdTotal.textContent = formatCurrency(inv.total);
+          tr.appendChild(tdTotal);
+
+          const tdPaid = document.createElement('td');
+          tdPaid.className = 'amount';
+          tdPaid.textContent = formatCurrency(inv.amountPaid);
+          tr.appendChild(tdPaid);
+
+          const tdDueAmt = document.createElement('td');
+          tdDueAmt.className = 'amount';
+          tdDueAmt.textContent = formatCurrency(inv.amountDue);
+          if (inv.amountDue > 0) tdDueAmt.style.color = 'var(--color-danger)';
+          tr.appendChild(tdDueAmt);
+
+          tbody.appendChild(tr);
+        }
+      } catch (err) {
+        // Silently fail — Xero section just won't show
+        console.log('Xero invoices not available:', err.message);
+      }
+    }
+
+    function formatCurrency(val) {
+      if (val == null) return '';
+      return Number(val).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
+    }
+
     (async () => {
       await initApp();
       await loadAccountDetail();
       checkAddressFields();
+
+      // Load Xero invoices using the account name
+      const nameEl = document.getElementById('f-name');
+      if (nameEl && nameEl.value) {
+        loadXeroInvoices(nameEl.value);
+      }
     })();
   </script>
 </body>
