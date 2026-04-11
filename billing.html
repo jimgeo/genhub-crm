@@ -311,7 +311,6 @@
       // Pre-calculate zone totals
       var zoneTotals = {};
       filtered.forEach(function(row) {
-        if (row.type === 'old' || row.type === 'vacant') return;
         var z = row.zone || 'No Zone';
         if (!zoneTotals[z]) { zoneTotals[z] = {}; cols.forEach(function(c) { zoneTotals[z][c] = 0; }); }
         cols.forEach(function(col) { zoneTotals[z][col] += (row.amounts[col] || 0); });
