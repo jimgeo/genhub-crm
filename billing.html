@@ -19,7 +19,7 @@
     .billing-table th.sticky-col { z-index: 5; background: var(--color-gray-100); }
     .billing-table .col-account { left: 0; min-width: 140px; }
     .billing-table .col-area { left: 140px; min-width: 90px; }
-    .billing-table .col-type { left: 230px; min-width: 60px; }
+    .billing-table .col-type { left: 230px; min-width: 60px; box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
     .billing-table td.amount { text-align: right; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 10px; }
     .billing-table td.amount.has-value { background: #f0faf4; }
     .billing-table tr:hover td { background: var(--color-gray-50); }
@@ -41,7 +41,7 @@
     .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
     .billing-table td.cat-additional { background: #e8f4fd; }
 
-    .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-50); }
+    .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-50); box-shadow: 2px 0 4px -2px rgba(0,0,0,0.08); }
 
     .billing-table td.has-note { position: relative; z-index: 0; }
     .billing-table td.has-note::after {
@@ -55,7 +55,7 @@
       padding: 6px 10px; border-radius: var(--radius); z-index: 10;
       pointer-events: none; line-height: 1.4;
     }
-    .billing-table td.has-note:hover { z-index: 3; }
+    .billing-table td.has-note:hover { z-index: 1; }
     .billing-table td.has-note:hover .note-tip { display: block; }
 
     .zone-notes-btn {
@@ -102,10 +102,37 @@
       '#553c9a', '#1a535c', '#6b3fa0', '#b7410e', '#2d3748'
     ];
 
+    var SORTABLE_ZONES = ['CoClub Memberships', 'Postal Services'];
+    var zoneSortMode = {}; // zone -> 'oldest' | 'az'
+    SORTABLE_ZONES.forEach(function(z) { zoneSortMode[z] = 'oldest'; });
+
     var allRows = [];
     var allCols = [];
     var showOld = false;
     var hideVacant = false;
+
+    function sortRows() {
+      var zoneOrder = Lookups.get('zone');
+      allRows.sort(function(a, b) {
+        var ai = zoneOrder.indexOf(a.zone);
+        var bi = zoneOrder.indexOf(b.zone);
+        if (ai === -1 && bi === -1) {
+          var zc = a.zone.localeCompare(b.zone);
+          if (zc !== 0) return zc;
+        } else {
+          if (ai === -1) ai = 9999;
+          if (bi === -1) bi = 9999;
+          if (ai !== bi) return ai - bi;
+        }
+        var areaC = a.area.localeCompare(b.area);
+        if (areaC !== 0) return areaC;
+        if (SORTABLE_ZONES.indexOf(a.zone) !== -1) {
+          var mode = zoneSortMode[a.zone] || 'oldest';
+          if (mode === 'oldest') return (a.fromDate || 999999) - (b.fromDate || 999999) || a.account_name.localeCompare(b.account_name);
+        }
+        return a.account_name.localeCompare(b.account_name);
+      });
+    }
 
     async function loadBilling() {
       var data = await SheetsAPI.batchGet([
@@ -160,6 +187,19 @@
       });
 
       var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
+
+      // Compute fromDate (earliest month+year with a value) for each row
+      Object.values(rowMap).forEach(function(row) {
+        var earliest = null;
+        Object.keys(row.amounts).forEach(function(colKey) {
+          var parts = colKey.split(' ');
+          var m = monthOrder[parts[0]] || 0;
+          var y = parseInt(parts[1]) || 0;
+          var val = y * 100 + m;
+          if (earliest === null || val < earliest) earliest = val;
+        });
+        row.fromDate = earliest || 999999;
+      });
       allCols = Object.keys(colSet).sort(function(a, b) {
         var ca = colSet[a], cb = colSet[b];
         var d = parseInt(cb.year) - parseInt(ca.year);
@@ -186,22 +226,8 @@
         }
       });
 
-      var zoneOrder = Lookups.get('zone');
-      allRows = Object.values(rowMap).sort(function(a, b) {
-        var ai = zoneOrder.indexOf(a.zone);
-        var bi = zoneOrder.indexOf(b.zone);
-        if (ai === -1 && bi === -1) {
-          var zc = a.zone.localeCompare(b.zone);
-          if (zc !== 0) return zc;
-        } else {
-          if (ai === -1) ai = 9999;
-          if (bi === -1) bi = 9999;
-          if (ai !== bi) return ai - bi;
-        }
-        return a.area.localeCompare(b.area)
-          || a.account_name.localeCompare(b.account_name);
-      });
-
+      allRows = Object.values(rowMap);
+      sortRows();
       renderTable();
     }
 
@@ -293,6 +319,45 @@
           toggle.textContent = '\u25BC';
           ztd.appendChild(toggle);
           ztd.appendChild(document.createTextNode(' ' + zoneName));
+
+          // Sort toggle for CoClub / Postal zones
+          if (SORTABLE_ZONES.indexOf(zoneName) !== -1) {
+            var sortSpan = document.createElement('span');
+            sortSpan.className = 'zone-notes-btn';
+            sortSpan.style.marginLeft = '16px';
+            var mode = zoneSortMode[zoneName] || 'oldest';
+            var oldestLink = document.createElement('span');
+            var azLink = document.createElement('span');
+            function updateSortLinks() {
+              var m = zoneSortMode[zoneName] || 'oldest';
+              oldestLink.style.fontWeight = m === 'oldest' ? '700' : '400';
+              oldestLink.style.textDecoration = m === 'oldest' ? 'none' : 'underline';
+              oldestLink.style.cursor = m === 'oldest' ? 'default' : 'pointer';
+              azLink.style.fontWeight = m === 'az' ? '700' : '400';
+              azLink.style.textDecoration = m === 'az' ? 'none' : 'underline';
+              azLink.style.cursor = m === 'az' ? 'default' : 'pointer';
+            }
+            sortSpan.appendChild(document.createTextNode('Sort: '));
+            oldestLink.textContent = 'Oldest';
+            oldestLink.addEventListener('click', function(e) {
+              e.stopPropagation();
+              zoneSortMode[zoneName] = 'oldest';
+              sortRows();
+              renderTable();
+            });
+            sortSpan.appendChild(oldestLink);
+            sortSpan.appendChild(document.createTextNode(' | '));
+            azLink.textContent = 'A-Z';
+            azLink.addEventListener('click', function(e) {
+              e.stopPropagation();
+              zoneSortMode[zoneName] = 'az';
+              sortRows();
+              renderTable();
+            });
+            sortSpan.appendChild(azLink);
+            updateSortLinks();
+            ztd.appendChild(sortSpan);
+          }
 
           var notesBtn = document.createElement('span');
           notesBtn.className = 'zone-notes-btn';
