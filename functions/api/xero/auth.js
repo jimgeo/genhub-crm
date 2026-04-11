@@ -21,11 +21,12 @@ export async function onRequest(context) {
 
   const redirectUri = new URL('/api/xero/callback', context.request.url).origin + '/api/xero/callback';
 
+  // Granular scopes (required for apps created after 2 March 2026)
   const scopes = [
     'openid',
     'profile',
     'email',
-    'accounting.transactions.read',
+    'accounting.invoices.read',
     'accounting.contacts.read',
     'offline_access'
   ].join(' ');
