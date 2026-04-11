@@ -304,10 +304,12 @@
           ztr.className = 'zone-group-row';
           ztr.setAttribute('data-zone', zoneName);
 
-          // Zone label — full width, no totals
+          // Zone label — full width, sticky
           var ztd = document.createElement('td');
           ztd.colSpan = cols.length + 3;
           ztd.style.background = bgCol;
+          ztd.style.position = 'sticky';
+          ztd.style.left = '0';
           var toggle = document.createElement('span');
           toggle.className = 'zone-toggle';
           toggle.textContent = '\u25BC';
@@ -378,6 +380,11 @@
             var notesVisible = btn && btn.textContent === 'Hide notes';
             var next = ztr.nextElementSibling;
             while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
+              // Skip zone totals row — always visible
+              if (next.classList.contains('zone-totals-row')) {
+                next = next.nextElementSibling;
+                continue;
+              }
               if (hide) {
                 next.style.display = 'none';
               } else if (next.classList.contains('notes-row')) {
