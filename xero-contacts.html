@@ -300,12 +300,13 @@
           }
         }
 
-        // Word overlap match
-        const acctWords = acctLower.split(/\s+/);
-        const xcWords = xcLower.split(/\s+/);
-        const overlap = acctWords.filter(w => xcWords.includes(w) && w.length > 2).length;
+        // Word overlap match — ignore common business suffixes
+        const stopWords = new Set(['ltd', 'limited', 'inc', 'llc', 'plc', 'co', 'the', 'and', '&', 'uk', 'group']);
+        const acctWords = acctLower.split(/\s+/).filter(w => !stopWords.has(w) && w.length > 2);
+        const xcWords = xcLower.split(/\s+/).filter(w => !stopWords.has(w) && w.length > 2);
+        const overlap = acctWords.filter(w => xcWords.includes(w)).length;
         const totalWords = Math.max(acctWords.length, xcWords.length);
-        if (totalWords > 0) {
+        if (totalWords > 0 && overlap > 0) {
           const wordScore = overlap / totalWords;
           if (wordScore > 0.4 && wordScore > bestScore) {
             bestScore = wordScore;
