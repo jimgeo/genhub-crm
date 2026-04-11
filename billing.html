@@ -35,7 +35,7 @@
 
     .billing-table tr.type-old td { color: var(--color-gray-400); }
     .billing-table tr.type-old td.has-value { background: #fafafa; }
-    .billing-table tr.type-vacant td { color: var(--color-gray-300); font-style: italic; }
+    .billing-table tr.type-vacant td { color: var(--color-danger); font-style: italic; }
     .billing-table td.cat-additional { background: #e8f4fd; }
 
     .billing-table tr:hover td.sticky-col { z-index: 4; background: var(--color-gray-100); }
@@ -76,6 +76,7 @@
         <label style="display:flex;align-items:center;gap:6px;font-family:var(--font-ui);font-size:11px;font-weight:500;color:var(--color-gray-500);cursor:pointer;">
           <input type="checkbox" id="hide-vacant"> Hide vacant
         </label>
+        <button class="btn btn-sm" id="collapse-all-btn" onclick="toggleCollapseAll()" style="margin-left:12px;">Collapse All</button>
         <span id="record-count" style="font-family:var(--font-ui);font-size:11px;color:var(--color-gray-400);margin-left:auto;"></span>
       </div>
 
@@ -223,6 +224,29 @@
       allRows = Object.values(rowMap);
       sortRows();
       renderTable();
+    }
+
+    var allCollapsed = false;
+    function toggleCollapseAll() {
+      allCollapsed = !allCollapsed;
+      var btn = document.getElementById('collapse-all-btn');
+      btn.textContent = allCollapsed ? 'Expand All' : 'Collapse All';
+      document.querySelectorAll('.zone-group-row').forEach(function(ztr) {
+        if (allCollapsed) {
+          ztr.classList.add('collapsed');
+        } else {
+          ztr.classList.remove('collapsed');
+        }
+        var next = ztr.nextElementSibling;
+        while (next && !next.classList.contains('zone-group-row') && !next.classList.contains('billing-total')) {
+          if (next.classList.contains('zone-totals-row')) {
+            next = next.nextElementSibling;
+            continue;
+          }
+          next.style.display = allCollapsed ? 'none' : '';
+          next = next.nextElementSibling;
+        }
+      });
     }
 
     function renderTable() {
