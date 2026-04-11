@@ -327,12 +327,12 @@
           ztr.className = 'zone-group-row';
           ztr.setAttribute('data-zone', zoneName);
 
-          // Zone label — full width, sticky
+          // Zone label — sticky in Account column
           var ztd = document.createElement('td');
-          ztd.colSpan = cols.length + 3;
           ztd.style.background = bgCol;
           ztd.style.position = 'sticky';
           ztd.style.left = '0';
+          ztd.style.zIndex = '4';
           var toggle = document.createElement('span');
           toggle.className = 'zone-toggle';
           toggle.textContent = '\u25BC';
@@ -396,6 +396,13 @@
           });
           ztd.appendChild(notesBtn);
           ztr.appendChild(ztd);
+
+          // Empty cells for Area, Type, and month columns
+          for (var fi = 0; fi < 2 + cols.length; fi++) {
+            var ftd = document.createElement('td');
+            ftd.style.background = bgCol;
+            ztr.appendChild(ftd);
+          }
           ztr.addEventListener('click', function() {
             ztr.classList.toggle('collapsed');
             var hide = ztr.classList.contains('collapsed');
