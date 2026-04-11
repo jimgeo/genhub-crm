@@ -179,6 +179,7 @@ Local KV data is stored in `.wrangler/state/` (gitignored).
 - [x] Config endpoint updated to expose `XERO_CLIENT_ID`
 - [x] Admin page: Xero connection status + Connect/Reconnect button
 - [x] Account detail page: Xero Invoices section (matches by account name)
-- [ ] KV namespace created and bound in Cloudflare dashboard
-- [ ] First OAuth connection test
+- [x] KV namespace created and bound in Cloudflare dashboard
+- [x] First OAuth connection test — working (2026-04-11)
+- [x] Invoice display on account detail — working (matched by account name)
 - [ ] Contact matching refinement (fuzzy match or stored xero_contact_id)
