@@ -105,10 +105,36 @@
         </div>
       </div>
 
+      <!-- Summary Cards -->
+      <div id="summary-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;">
+        <div class="card" style="padding:16px;margin:0;cursor:pointer;" onclick="filterBy('')">
+          <div style="font-family:var(--font-ui);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-gray-500);">Total Accounts</div>
+          <div id="stat-total" style="font-family:var(--font-ui);font-size:28px;font-weight:700;color:var(--color-black);margin-top:4px;">—</div>
+        </div>
+        <div class="card" style="padding:16px;margin:0;cursor:pointer;" onclick="filterBy('not-invoiced')">
+          <div style="font-family:var(--font-ui);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-danger);">Not Invoiced</div>
+          <div id="stat-not-invoiced" style="font-family:var(--font-ui);font-size:28px;font-weight:700;color:var(--color-danger);margin-top:4px;">—</div>
+          <div style="font-size:11px;color:var(--color-gray-400);margin-top:2px;">No Xero invoices found</div>
+        </div>
+        <div class="card" style="padding:16px;margin:0;cursor:pointer;" onclick="filterBy('exact')">
+          <div style="font-family:var(--font-ui);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#15803d;">Exact Match</div>
+          <div id="stat-exact" style="font-family:var(--font-ui);font-size:28px;font-weight:700;color:#15803d;margin-top:4px;">—</div>
+        </div>
+        <div class="card" style="padding:16px;margin:0;cursor:pointer;" onclick="filterBy('close')">
+          <div style="font-family:var(--font-ui);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:#92400e;">Close Match</div>
+          <div id="stat-close" style="font-family:var(--font-ui);font-size:28px;font-weight:700;color:#92400e;margin-top:4px;">—</div>
+        </div>
+        <div class="card" style="padding:16px;margin:0;cursor:pointer;" onclick="filterBy('none')">
+          <div style="font-family:var(--font-ui);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-gray-500);">No Match</div>
+          <div id="stat-none" style="font-family:var(--font-ui);font-size:28px;font-weight:700;color:var(--color-gray-500);margin-top:4px;">—</div>
+        </div>
+      </div>
+
       <div class="toolbar">
         <input type="text" class="search-input" id="search" placeholder="Search accounts...">
         <select class="form-select" id="filter-match" style="width:auto;">
           <option value="">All</option>
+          <option value="not-invoiced">Not Invoiced</option>
           <option value="exact">Exact Match</option>
           <option value="close">Close Match</option>
           <option value="none">No Match</option>
@@ -124,6 +150,8 @@
                 <th>Type</th>
                 <th>Match</th>
                 <th>Xero Contact</th>
+                <th>Invoices</th>
+                <th style="text-align:right;">Total Invoiced</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -155,6 +183,7 @@
   <script src="js/layout.js"></script>
   <script>
     let xeroContacts = [];
+    let xeroInvoices = [];
     let crmAccounts = [];
     let matchedData = [];
     let currentItem = null;
@@ -170,7 +199,7 @@
           tbody.textContent = '';
           const tr = document.createElement('tr');
           const td = document.createElement('td');
-          td.setAttribute('colspan', '5');
+          td.setAttribute('colspan', '7');
           td.className = 'empty-state';
           td.textContent = 'Xero not connected. Go to Admin to connect.';
           tr.appendChild(td);
@@ -178,24 +207,50 @@
           return;
         }
 
-        // Fetch Xero contacts and CRM accounts in parallel
-        const [xeroResp, accountsRaw] = await Promise.all([
+        // Fetch Xero contacts, invoices, and CRM accounts in parallel
+        const [xeroResp, invoicesResp, accountsRaw] = await Promise.all([
           fetch('/api/xero/contacts'),
+          fetch('/api/xero/invoices'),
           SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS)
         ]);
 
         const xeroData = await xeroResp.json();
         xeroContacts = xeroData.contacts || [];
+
+        const invoicesData = await invoicesResp.json();
+        xeroInvoices = invoicesData.invoices || [];
+
         crmAccounts = accountsRaw.filter(a => a.is_deleted !== 'TRUE');
+
+        // Index invoices by contact name for fast lookup
+        const invoicesByContact = {};
+        for (const inv of xeroInvoices) {
+          const name = (inv.contact || '').toLowerCase().trim();
+          if (!invoicesByContact[name]) invoicesByContact[name] = [];
+          invoicesByContact[name].push(inv);
+        }
 
         // Build match data — CRM accounts as primary
         matchedData = crmAccounts.map(acct => {
           const result = findMatch(acct.name, xeroContacts);
+
+          // Find invoices for matched Xero contact
+          let accountInvoices = [];
+          if (result.contact) {
+            const contactName = (result.contact.name || '').toLowerCase().trim();
+            accountInvoices = invoicesByContact[contactName] || [];
+          }
+
+          const totalInvoiced = accountInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+
           return {
             account: acct,
             matchType: result.type,
             xeroContact: result.contact,
-            score: result.score
+            score: result.score,
+            invoices: accountInvoices,
+            invoiceCount: accountInvoices.length,
+            totalInvoiced: totalInvoiced
           };
         });
 
@@ -211,7 +266,7 @@
         tbody.textContent = '';
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.setAttribute('colspan', '5');
+        td.setAttribute('colspan', '7');
         td.className = 'empty-state';
         td.textContent = 'Error loading data: ' + err.message;
         tr.appendChild(td);
@@ -267,11 +322,25 @@
     }
 
     function updateStats() {
+      const total = matchedData.length;
       const exact = matchedData.filter(d => d.matchType === 'exact').length;
       const close = matchedData.filter(d => d.matchType === 'close').length;
       const none = matchedData.filter(d => d.matchType === 'none').length;
+      const notInvoiced = matchedData.filter(d => d.invoiceCount === 0).length;
+
+      document.getElementById('stat-total').textContent = total;
+      document.getElementById('stat-not-invoiced').textContent = notInvoiced;
+      document.getElementById('stat-exact').textContent = exact;
+      document.getElementById('stat-close').textContent = close;
+      document.getElementById('stat-none').textContent = none;
+
       const el = document.getElementById('stats');
-      el.textContent = matchedData.length + ' accounts | ' + exact + ' matched | ' + close + ' close | ' + none + ' unmatched';
+      el.textContent = '';
+    }
+
+    function filterBy(value) {
+      document.getElementById('filter-match').value = value === 'not-invoiced' ? 'not-invoiced' : value;
+      applyFilters();
     }
 
     function wireControls() {
@@ -285,7 +354,9 @@
 
       let filtered = matchedData;
 
-      if (matchFilter) {
+      if (matchFilter === 'not-invoiced') {
+        filtered = filtered.filter(d => d.invoiceCount === 0);
+      } else if (matchFilter) {
         filtered = filtered.filter(d => d.matchType === matchFilter);
       }
 
@@ -306,7 +377,7 @@
       if (data.length === 0) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.setAttribute('colspan', '5');
+        td.setAttribute('colspan', '7');
         td.className = 'empty-state';
         td.textContent = 'No accounts match filters';
         tr.appendChild(td);
@@ -361,6 +432,34 @@
           tdXero.style.color = 'var(--color-gray-400)';
         }
         tr.appendChild(tdXero);
+
+        // Invoice count
+        const tdInvCount = document.createElement('td');
+        if (item.invoiceCount > 0) {
+          tdInvCount.textContent = item.invoiceCount;
+          tdInvCount.style.fontWeight = '600';
+        } else if (item.matchType === 'exact' || item.matchType === 'close') {
+          tdInvCount.textContent = '0';
+          tdInvCount.style.color = 'var(--color-danger)';
+          tdInvCount.style.fontWeight = '600';
+        } else {
+          tdInvCount.textContent = '—';
+          tdInvCount.style.color = 'var(--color-gray-400)';
+        }
+        tr.appendChild(tdInvCount);
+
+        // Total invoiced
+        const tdTotal = document.createElement('td');
+        tdTotal.style.textAlign = 'right';
+        tdTotal.style.fontFamily = "'SF Mono', 'Fira Code', monospace";
+        tdTotal.style.fontSize = '12px';
+        if (item.totalInvoiced > 0) {
+          tdTotal.textContent = Number(item.totalInvoiced).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
+        } else {
+          tdTotal.textContent = '—';
+          tdTotal.style.color = 'var(--color-gray-400)';
+        }
+        tr.appendChild(tdTotal);
 
         // Actions
         const tdActions = document.createElement('td');
