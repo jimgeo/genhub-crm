@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Billing Chart — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .chart-wrap {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+      padding: 24px;
+      max-width: 1400px;
+    }
+    .chart-canvas {
+      width: 100%;
+      height: 450px;
+    }
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-gray-200);
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--color-gray-600);
+      cursor: pointer;
+      user-select: none;
+    }
+    .legend-item.hidden { opacity: 0.35; text-decoration: line-through; }
+    .legend-swatch {
+      width: 12px;
+      height: 3px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+    .legend-item.total-line .legend-swatch {
+      height: 4px;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="billing.html">Billing</a> / <span>Chart</span></div>
+      <div class="page-header">
+        <h1 class="page-title">Billing Chart</h1>
+        <p style="font-size:13px;color:var(--color-gray-500);">Monthly totals by zone over time</p>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="chart" class="chart-canvas"></canvas>
+        <div class="chart-legend" id="chart-legend"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script src="js/lookups.js"></script>
+  <script>
+    var ZONE_COLOURS = [
+      '#4a5568', '#2b6cb0', '#2f855a', '#9b2c2c', '#744210',
+      '#553c9a', '#1a535c', '#6b3fa0', '#b7410e', '#2d3748'
+    ];
+    var TOTAL_COLOUR = '#111111';
+
+    var seriesData = [];  // { name, colour, values: [{ label, value }], visible }
+    var labels = [];
+
+    async function loadChartData() {
+      var data = await SheetsAPI.batchGet([
+        CONFIG.SHEETS.BILLING, CONFIG.SHEETS.BILLING_AGREEMENTS,
+        CONFIG.SHEETS.ACCOUNTS, CONFIG.SHEETS.AREAS
+      ]);
+      var billing = (data.Billing || []).filter(function(b) { return b.is_deleted !== 'TRUE'; });
+      var agreements = (data.Billing_Agreement || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      var accounts = (data.Accounts || []).filter(function(a) { return a.is_deleted !== 'TRUE'; });
+
+      var agreementMap = {};
+      agreements.forEach(function(a) { agreementMap[a.agreement_id] = a; });
+
+      var acctNames = {};
+      accounts.forEach(function(a) { acctNames[a.account_id] = a.name; });
+
+      var monthOrder = { JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8, SEP:9, OCT:10, NOV:11, DEC:12 };
+
+      // Aggregate by zone and month
+      var zoneTotals = {};  // zone -> { colKey -> amount }
+      var colSet = {};
+
+      billing.forEach(function(b) {
+        var agr = agreementMap[b.agreement_id] || {};
+        var zone = agr.zone || 'Other';
+        var month = (b.month || '').toUpperCase();
+        var year = b.year || '';
+        var amount = parseFloat(b.amount) || 0;
+        if (!month || !year) return;
+
+        var colKey = month + ' ' + year;
+        colSet[colKey] = { month: month, year: parseInt(year) };
+
+        if (!zoneTotals[zone]) zoneTotals[zone] = {};
+        zoneTotals[zone][colKey] = (zoneTotals[zone][colKey] || 0) + amount;
+      });
+
+      // Sort columns chronologically (oldest first for the chart)
+      var cols = Object.keys(colSet).sort(function(a, b) {
+        var ca = colSet[a], cb = colSet[b];
+        var d = ca.year - cb.year;
+        if (d !== 0) return d;
+        return (monthOrder[ca.month] || 0) - (monthOrder[cb.month] || 0);
+      });
+
+      // Build short labels (e.g. "Jan 23")
+      var shortMonth = { JAN:'Jan', FEB:'Feb', MAR:'Mar', APR:'Apr', MAY:'May', JUN:'Jun', JUL:'Jul', AUG:'Aug', SEP:'Sep', OCT:'Oct', NOV:'Nov', DEC:'Dec' };
+      labels = cols.map(function(c) {
+        var parts = c.split(' ');
+        return (shortMonth[parts[0]] || parts[0]) + ' ' + parts[1].slice(-2);
+      });
+
+      // Sort zones by lookup order
+      var zoneOrder = Lookups.get('zone');
+      var zones = Object.keys(zoneTotals).sort(function(a, b) {
+        var ai = zoneOrder.indexOf(a);
+        var bi = zoneOrder.indexOf(b);
+        if (ai === -1) ai = 9999;
+        if (bi === -1) bi = 9999;
+        return ai - bi;
+      });
+
+      // Build series
+      seriesData = zones.map(function(zone, i) {
+        return {
+          name: zone,
+          colour: ZONE_COLOURS[i % ZONE_COLOURS.length],
+          values: cols.map(function(col) { return zoneTotals[zone][col] || 0; }),
+          visible: true
+        };
+      });
+
+      // Add total line
+      var totalValues = cols.map(function(col, ci) {
+        var sum = 0;
+        seriesData.forEach(function(s) { sum += s.values[ci]; });
+        return sum;
+      });
+      seriesData.push({
+        name: 'Total',
+        colour: TOTAL_COLOUR,
+        values: totalValues,
+        visible: true,
+        isTotal: true
+      });
+
+      renderChart();
+      renderLegend();
+    }
+
+    function renderChart() {
+      var canvas = document.getElementById('chart');
+      var ctx = canvas.getContext('2d');
+      var dpr = window.devicePixelRatio || 1;
+      var rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      var W = rect.width;
+      var H = rect.height;
+
+      ctx.clearRect(0, 0, W, H);
+
+      if (labels.length === 0) return;
+
+      var padLeft = 70;
+      var padRight = 20;
+      var padTop = 20;
+      var padBottom = 50;
+      var chartW = W - padLeft - padRight;
+      var chartH = H - padTop - padBottom;
+
+      // Find max value across visible series
+      var maxVal = 0;
+      seriesData.forEach(function(s) {
+        if (!s.visible) return;
+        s.values.forEach(function(v) { if (v > maxVal) maxVal = v; });
+      });
+      if (maxVal === 0) maxVal = 1000;
+      maxVal = Math.ceil(maxVal / 1000) * 1000;
+
+      // Draw grid lines and Y labels
+      ctx.strokeStyle = '#e5e2df';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#919191';
+      ctx.font = '10px Montserrat, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      var gridLines = 5;
+      for (var i = 0; i <= gridLines; i++) {
+        var y = padTop + chartH - (i / gridLines) * chartH;
+        var val = (i / gridLines) * maxVal;
+        ctx.beginPath();
+        ctx.moveTo(padLeft, y);
+        ctx.lineTo(W - padRight, y);
+        ctx.stroke();
+        ctx.fillText(formatShort(val), padLeft - 8, y);
+      }
+
+      // Draw X labels
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      var step = Math.max(1, Math.floor(labels.length / 20));
+      for (var i = 0; i < labels.length; i += step) {
+        var x = padLeft + (i / (labels.length - 1)) * chartW;
+        ctx.fillText(labels[i], x, padTop + chartH + 8);
+      }
+
+      // Draw lines
+      seriesData.forEach(function(series) {
+        if (!series.visible) return;
+        ctx.strokeStyle = series.colour;
+        ctx.lineWidth = series.isTotal ? 3 : 1.5;
+        ctx.globalAlpha = series.isTotal ? 1 : 0.8;
+        ctx.beginPath();
+        var started = false;
+        for (var i = 0; i < series.values.length; i++) {
+          var x = padLeft + (i / (labels.length - 1)) * chartW;
+          var y = padTop + chartH - (series.values[i] / maxVal) * chartH;
+          if (!started) { ctx.moveTo(x, y); started = true; }
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    function renderLegend() {
+      var el = document.getElementById('chart-legend');
+      el.textContent = '';
+      seriesData.forEach(function(series, idx) {
+        var item = document.createElement('div');
+        item.className = 'legend-item' + (series.isTotal ? ' total-line' : '') + (series.visible ? '' : ' hidden');
+
+        var swatch = document.createElement('span');
+        swatch.className = 'legend-swatch';
+        swatch.style.background = series.colour;
+        item.appendChild(swatch);
+
+        var label = document.createElement('span');
+        label.textContent = series.name;
+        item.appendChild(label);
+
+        item.addEventListener('click', function() {
+          series.visible = !series.visible;
+          item.classList.toggle('hidden', !series.visible);
+          // Recalculate total if toggling a non-total series
+          if (!series.isTotal) {
+            var totalSeries = seriesData.find(function(s) { return s.isTotal; });
+            if (totalSeries) {
+              totalSeries.values = labels.map(function(_, ci) {
+                var sum = 0;
+                seriesData.forEach(function(s) {
+                  if (!s.isTotal && s.visible) sum += s.values[ci];
+                });
+                return sum;
+              });
+            }
+          }
+          renderChart();
+        });
+
+        el.appendChild(item);
+      });
+    }
+
+    function formatShort(val) {
+      if (val >= 1000) return (val / 1000).toFixed(val % 1000 === 0 ? 0 : 1) + 'k';
+      return val.toFixed(0);
+    }
+
+    window.addEventListener('resize', function() { renderChart(); });
+
+    (async function() {
+      await initApp();
+      await loadChartData();
+    })();
+  </script>
+</body>
+</html>
