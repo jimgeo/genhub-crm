@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Enrichment — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .enrich-grid {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .account-list {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+      max-height: 700px;
+      overflow-y: auto;
+    }
+    .account-list-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--color-gray-100);
+      cursor: pointer;
+      font-family: var(--font-body);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .account-list-item:hover { background: var(--color-gray-100); }
+    .account-list-item.active { background: #dbeafe; color: #1e40af; font-weight: 600; }
+    .account-list-search {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--color-gray-200);
+      position: sticky;
+      top: 0;
+      background: var(--color-white);
+    }
+    .account-list-search input {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 12px;
+      border: 1px solid var(--color-gray-200);
+      border-radius: 4px;
+      font-family: var(--font-body);
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr 1fr;
+      gap: 0;
+    }
+    .compare-grid > div {
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--color-gray-100);
+      font-size: 12px;
+      font-family: var(--font-body);
+    }
+    .compare-grid .col-header {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-gray-500);
+      background: var(--color-gray-100);
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .compare-grid .field-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-gray-400);
+      background: var(--color-gray-50);
+    }
+    .compare-grid .field-value {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .compare-grid .field-value.empty {
+      color: var(--color-gray-300);
+      font-style: italic;
+    }
+    .compare-grid .field-value.diff {
+      background: #fef3c7;
+    }
+    .compare-grid .field-value.match {
+      background: #f0faf4;
+    }
+
+    .source-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+      margin-left: 8px;
+    }
+    .xero-missing {
+      background: var(--color-gray-100);
+      color: var(--color-gray-500);
+    }
+
+    @media (max-width: 900px) {
+      .enrich-grid { grid-template-columns: 1fr; }
+      .compare-grid { grid-template-columns: 100px 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="admin.html">Admin</a> / <span>Account Enrichment</span></div>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Account Enrichment</h1>
+          <p style="font-size:13px;color:var(--color-gray-500);">Compare CRM account data with Xero. Read-only — no changes saved.</p>
+        </div>
+        <span id="stats" style="font-size:13px;color:var(--color-gray-500);"></span>
+      </div>
+
+      <div class="enrich-grid">
+        <!-- Account list -->
+        <div class="account-list">
+          <div class="account-list-search">
+            <input type="text" id="search" placeholder="Search accounts...">
+          </div>
+          <div id="account-list"></div>
+        </div>
+
+        <!-- Comparison view -->
+        <div>
+          <div class="card" id="comparison-card">
+            <div style="padding:20px;color:var(--color-gray-400);text-align:center;font-family:var(--font-ui);font-size:13px;">
+              Select an account from the list to compare
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    var allAccounts = [];
+    var allContacts = [];
+    var xeroContacts = [];
+    var xeroByName = {};
+    var currentAccountId = null;
+    var xeroConnected = false;
+
+    async function loadData() {
+      try {
+        try {
+          const statusResp = await fetch('/api/xero/status');
+          const statusData = await statusResp.json();
+          xeroConnected = statusData.connected;
+        } catch (e) {}
+
+        const promises = [
+          SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS),
+          SheetsAPI.getAll(CONFIG.SHEETS.CONTACTS)
+        ];
+        if (xeroConnected) {
+          promises.push(fetch('/api/xero/contacts').then(r => r.json()).catch(() => ({ contacts: [] })));
+        }
+
+        const results = await Promise.all(promises);
+        allAccounts = results[0].filter(a => a.is_deleted !== 'TRUE');
+        allContacts = results[1].filter(c => c.is_deleted !== 'TRUE');
+        xeroContacts = xeroConnected ? (results[2].contacts || []) : [];
+
+        xeroByName = {};
+        xeroContacts.forEach(xc => {
+          xeroByName[(xc.name || '').toLowerCase().trim()] = xc;
+        });
+
+        updateStats();
+        renderAccountList('');
+        wireSearch();
+      } catch (err) {
+        document.getElementById('account-list').textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function updateStats() {
+      const total = allAccounts.length;
+      const withXero = allAccounts.filter(a => xeroByName[(a.name || '').toLowerCase().trim()]).length;
+      const msg = total + ' accounts';
+      document.getElementById('stats').textContent = xeroConnected
+        ? msg + ' | ' + withXero + ' matched to Xero'
+        : msg + ' | Xero not connected';
+    }
+
+    function wireSearch() {
+      document.getElementById('search').addEventListener('input', function() {
+        renderAccountList(this.value);
+      });
+    }
+
+    function renderAccountList(query) {
+      const listEl = document.getElementById('account-list');
+      listEl.textContent = '';
+
+      const q = (query || '').toLowerCase().trim();
+      const filtered = allAccounts.filter(a => {
+        if (!q) return true;
+        return (a.name || '').toLowerCase().includes(q);
+      }).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+      filtered.forEach(a => {
+        const item = document.createElement('div');
+        item.className = 'account-list-item' + (a.account_id === currentAccountId ? ' active' : '');
+
+        const logo = buildCompanyLogoEl(a.website, a.name, 20);
+        item.appendChild(logo);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = a.name || '(unnamed)';
+        nameSpan.style.flex = '1';
+        nameSpan.style.overflow = 'hidden';
+        nameSpan.style.textOverflow = 'ellipsis';
+        item.appendChild(nameSpan);
+
+        const xc = xeroByName[(a.name || '').toLowerCase().trim()];
+        if (xc) {
+          const dot = document.createElement('span');
+          dot.textContent = '●';
+          dot.style.color = '#15803d';
+          dot.style.fontSize = '10px';
+          dot.title = 'Matched to Xero';
+          item.appendChild(dot);
+        }
+
+        item.addEventListener('click', function() {
+          currentAccountId = a.account_id;
+          renderAccountList(document.getElementById('search').value);
+          renderComparison(a);
+        });
+
+        listEl.appendChild(item);
+      });
+    }
+
+    function renderComparison(acct) {
+      const card = document.getElementById('comparison-card');
+      card.textContent = '';
+      card.style.padding = '0';
+      card.style.overflow = 'hidden';
+
+      const xc = xeroByName[(acct.name || '').toLowerCase().trim()];
+      const acctContacts = allContacts.filter(c => c.account_id === acct.account_id);
+
+      const grid = document.createElement('div');
+      grid.className = 'compare-grid';
+
+      // Header row
+      const h1 = document.createElement('div');
+      h1.className = 'col-header';
+      h1.textContent = 'Field';
+      grid.appendChild(h1);
+
+      const h2 = document.createElement('div');
+      h2.className = 'col-header';
+      h2.textContent = 'GenHub CRM';
+      grid.appendChild(h2);
+
+      const h3 = document.createElement('div');
+      h3.className = 'col-header';
+      h3.appendChild(document.createTextNode('Xero'));
+      if (!xc) {
+        const badge = document.createElement('span');
+        badge.className = 'source-badge xero-missing';
+        badge.textContent = xeroConnected ? 'No match' : 'Not connected';
+        h3.appendChild(badge);
+      }
+      grid.appendChild(h3);
+
+      // Fields to compare
+      const crmAddress = [acct.address_line1, acct.address_line2, acct.city, acct.postcode].filter(Boolean).join('\n');
+      const xAddr = xc ? xc.address : null;
+      const xeroAddress = xAddr ? [xAddr.line1, xAddr.line2, xAddr.city, xAddr.region, xAddr.postalCode, xAddr.country].filter(Boolean).join('\n') : '';
+
+      const primaryCrm = acctContacts[0];
+      const primaryCrmName = primaryCrm ? ((primaryCrm.first_name || '') + ' ' + (primaryCrm.last_name || '')).trim() : '';
+      const primaryCrmEmail = primaryCrm ? (primaryCrm.email || '') : '';
+
+      const xeroContactName = xc && xc.primaryContact
+        ? ((xc.primaryContact.firstName || '') + ' ' + (xc.primaryContact.lastName || '')).trim()
+        : '';
+      const xeroContactEmail = xc && xc.primaryContact ? (xc.primaryContact.email || '') : '';
+
+      const xeroType = xc ? ((xc.isCustomer ? 'Customer ' : '') + (xc.isSupplier ? 'Supplier' : '')).trim() : '';
+
+      const fields = [
+        { label: 'Name', crm: acct.name, xero: xc ? xc.name : '' },
+        { label: 'Website', crm: acct.website, xero: xc ? xc.website : '' },
+        { label: 'Email', crm: acct.email, xero: xc ? xc.email : '' },
+        { label: 'Phone', crm: acct.phone, xero: xc ? (xc.phoneDefault || xc.phoneDDI || xc.phoneMobile) : '' },
+        { label: 'Mobile', crm: '', xero: xc ? xc.phoneMobile : '' },
+        { label: 'Address', crm: crmAddress, xero: xeroAddress },
+        { label: 'VAT Number', crm: '', xero: xc ? xc.taxNumber : '' },
+        { label: 'Co. Number', crm: '', xero: xc ? xc.companyNumber : '' },
+        { label: 'Account No.', crm: '', xero: xc ? xc.accountNumber : '' },
+        { label: 'Contact Name', crm: primaryCrmName, xero: xeroContactName },
+        { label: 'Contact Email', crm: primaryCrmEmail, xero: xeroContactEmail },
+        { label: 'Status', crm: acct.current === 'TRUE' || acct.current === 'Yes' ? 'Active' : 'Inactive', xero: xc ? xc.contactStatus : '' },
+        { label: 'Type (Xero)', crm: '', xero: xeroType }
+      ];
+
+      fields.forEach(f => {
+        const lbl = document.createElement('div');
+        lbl.className = 'field-label';
+        lbl.textContent = f.label;
+        grid.appendChild(lbl);
+
+        const crm = document.createElement('div');
+        crm.className = 'field-value';
+        if (!f.crm) {
+          crm.classList.add('empty');
+          crm.textContent = '—';
+        } else {
+          crm.textContent = f.crm;
+        }
+        grid.appendChild(crm);
+
+        const xero = document.createElement('div');
+        xero.className = 'field-value';
+        if (!f.xero) {
+          xero.classList.add('empty');
+          xero.textContent = '—';
+        } else {
+          xero.textContent = f.xero;
+          if (f.crm && f.xero) {
+            const crmNorm = (f.crm || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            const xeroNorm = (f.xero || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            if (crmNorm === xeroNorm) {
+              xero.classList.add('match');
+              crm.classList.add('match');
+            } else {
+              xero.classList.add('diff');
+              crm.classList.add('diff');
+            }
+          }
+        }
+        grid.appendChild(xero);
+      });
+
+      card.appendChild(grid);
+    }
+
+    (async function() {
+      await initApp();
+      await loadData();
+    })();
+  </script>
+</body>
+</html>

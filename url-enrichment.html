@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Enrichment — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .src-badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 8px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+      margin-right: 4px;
+    }
+    .src-contact { background: #dbeafe; color: #1e40af; }
+    .src-xero { background: #dcfce7; color: #15803d; }
+    .src-generic { background: var(--color-gray-100); color: var(--color-gray-500); }
+
+    .suggested-url {
+      font-family: 'SF Mono', monospace;
+      font-size: 12px;
+      color: var(--color-info);
+    }
+    .url-alt {
+      font-family: 'SF Mono', monospace;
+      font-size: 11px;
+      color: var(--color-gray-500);
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="admin.html">Admin</a> / <span>URL Enrichment</span></div>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">URL Enrichment</h1>
+          <p style="font-size:13px;color:var(--color-gray-500);">Suggest website URLs for accounts based on contact emails and Xero data. Read-only — no changes saved.</p>
+        </div>
+        <span id="stats" style="font-size:13px;color:var(--color-gray-500);"></span>
+      </div>
+
+      <div class="toolbar">
+        <input type="text" class="search-input" id="search" placeholder="Search accounts...">
+        <select class="form-select" id="filter-src" style="width:auto;">
+          <option value="">All with suggestion</option>
+          <option value="contact">Contact-derived</option>
+          <option value="xero">Xero-derived</option>
+          <option value="none">No suggestion</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Source</th>
+                <th>Suggested URL</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody id="enrich-tbody">
+              <tr><td colspan="4" class="empty-state">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    // Email domains to ignore (free/generic providers)
+    var GENERIC_DOMAINS = new Set([
+      'gmail.com','googlemail.com','yahoo.com','yahoo.co.uk','hotmail.com','hotmail.co.uk',
+      'outlook.com','live.com','icloud.com','me.com','aol.com','msn.com','mail.com',
+      'protonmail.com','proton.me','btinternet.com','sky.com','virginmedia.com','talktalk.net',
+      'ntlworld.com','tiscali.co.uk','blueyonder.co.uk','ymail.com'
+    ]);
+
+    var allData = [];
+
+    async function loadData() {
+      const tbody = document.getElementById('enrich-tbody');
+
+      try {
+        // Check Xero connection
+        let xeroConnected = false;
+        try {
+          const statusResp = await fetch('/api/xero/status');
+          const statusData = await statusResp.json();
+          xeroConnected = statusData.connected;
+        } catch (e) {}
+
+        const promises = [
+          SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS),
+          SheetsAPI.getAll(CONFIG.SHEETS.CONTACTS)
+        ];
+        if (xeroConnected) {
+          promises.push(fetch('/api/xero/contacts').then(r => r.json()).catch(() => ({ contacts: [] })));
+        }
+
+        const results = await Promise.all(promises);
+        const accounts = results[0].filter(a => a.is_deleted !== 'TRUE');
+        const contacts = results[1].filter(c => c.is_deleted !== 'TRUE');
+        const xeroContacts = xeroConnected ? (results[2].contacts || []) : [];
+
+        // Build Xero lookup by name (lowercased)
+        const xeroByName = {};
+        xeroContacts.forEach(xc => {
+          xeroByName[(xc.name || '').toLowerCase().trim()] = xc;
+        });
+
+        // Build contact lookup by account_id
+        const contactsByAccount = {};
+        contacts.forEach(c => {
+          if (!c.account_id) return;
+          if (!contactsByAccount[c.account_id]) contactsByAccount[c.account_id] = [];
+          contactsByAccount[c.account_id].push(c);
+        });
+
+        // Filter accounts with no website
+        const missingUrl = accounts.filter(a => !a.website || !a.website.trim());
+
+        // For each, try to derive a URL
+        allData = missingUrl.map(acct => {
+          let suggestions = [];
+
+          // 1. From Xero website
+          const xc = xeroByName[(acct.name || '').toLowerCase().trim()];
+          if (xc && xc.website && xc.website.trim()) {
+            suggestions.push({ source: 'xero', url: xc.website.trim(), evidence: 'Xero contact website' });
+          }
+
+          // 2. From contact emails (non-generic domains)
+          const acctContacts = contactsByAccount[acct.account_id] || [];
+          const domainCounts = {};
+          const domainEvidence = {};
+          acctContacts.forEach(c => {
+            const email = (c.email || '').trim().toLowerCase();
+            const at = email.indexOf('@');
+            if (at < 0) return;
+            const domain = email.slice(at + 1);
+            if (!domain || GENERIC_DOMAINS.has(domain)) return;
+            domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+            if (!domainEvidence[domain]) domainEvidence[domain] = [];
+            domainEvidence[domain].push((c.first_name || '') + ' ' + (c.last_name || '') + ' (' + email + ')');
+          });
+
+          const sortedDomains = Object.keys(domainCounts).sort((a, b) => domainCounts[b] - domainCounts[a]);
+          sortedDomains.forEach(domain => {
+            suggestions.push({
+              source: 'contact',
+              url: domain,
+              evidence: domainCounts[domain] + ' contact' + (domainCounts[domain] !== 1 ? 's' : '') + ': ' + domainEvidence[domain].slice(0, 2).join(', ') + (domainEvidence[domain].length > 2 ? '...' : '')
+            });
+          });
+
+          return {
+            account: acct,
+            suggestions: suggestions
+          };
+        });
+
+        // Sort: with suggestions first
+        allData.sort((a, b) => {
+          if (a.suggestions.length > 0 && b.suggestions.length === 0) return -1;
+          if (a.suggestions.length === 0 && b.suggestions.length > 0) return 1;
+          return (a.account.name || '').localeCompare(b.account.name || '');
+        });
+
+        updateStats();
+        applyFilters();
+        wireControls();
+
+      } catch (err) {
+        tbody.textContent = '';
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.setAttribute('colspan', '4');
+        td.className = 'empty-state';
+        td.textContent = 'Error: ' + err.message;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+      }
+    }
+
+    function updateStats() {
+      const total = allData.length;
+      const withSug = allData.filter(d => d.suggestions.length > 0).length;
+      document.getElementById('stats').textContent = total + ' accounts missing URL | ' + withSug + ' with suggestions';
+    }
+
+    function wireControls() {
+      document.getElementById('search').addEventListener('input', applyFilters);
+      document.getElementById('filter-src').addEventListener('change', applyFilters);
+    }
+
+    function applyFilters() {
+      const q = document.getElementById('search').value.toLowerCase().trim();
+      const src = document.getElementById('filter-src').value;
+
+      let filtered = allData;
+
+      if (src === 'none') {
+        filtered = filtered.filter(d => d.suggestions.length === 0);
+      } else if (src) {
+        filtered = filtered.filter(d => d.suggestions.some(s => s.source === src));
+      } else {
+        filtered = filtered.filter(d => d.suggestions.length > 0);
+      }
+
+      if (q) {
+        filtered = filtered.filter(d => (d.account.name || '').toLowerCase().includes(q));
+      }
+
+      renderTable(filtered);
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('enrich-tbody');
+      tbody.textContent = '';
+
+      if (data.length === 0) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.setAttribute('colspan', '4');
+        td.className = 'empty-state';
+        td.textContent = 'No results';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+
+      for (const item of data) {
+        if (item.suggestions.length === 0) {
+          const tr = document.createElement('tr');
+          const tdName = document.createElement('td');
+          const nameLink = document.createElement('a');
+          nameLink.href = 'account-detail.html?id=' + encodeURIComponent(item.account.account_id);
+          nameLink.textContent = item.account.name || '(unnamed)';
+          nameLink.style.color = 'var(--color-info)';
+          nameLink.style.textDecoration = 'none';
+          tdName.appendChild(nameLink);
+          tr.appendChild(tdName);
+
+          const tdSrc = document.createElement('td');
+          const span = document.createElement('span');
+          span.className = 'src-badge src-generic';
+          span.textContent = 'None';
+          tdSrc.appendChild(span);
+          tr.appendChild(tdSrc);
+
+          const tdUrl = document.createElement('td');
+          tdUrl.textContent = '—';
+          tdUrl.style.color = 'var(--color-gray-400)';
+          tr.appendChild(tdUrl);
+
+          const tdEv = document.createElement('td');
+          tdEv.textContent = 'No non-generic email domains found';
+          tdEv.style.color = 'var(--color-gray-400)';
+          tdEv.style.fontSize = '11px';
+          tr.appendChild(tdEv);
+
+          tbody.appendChild(tr);
+          continue;
+        }
+
+        // Primary suggestion row
+        const primary = item.suggestions[0];
+        const tr = document.createElement('tr');
+
+        const tdName = document.createElement('td');
+        const nameLink = document.createElement('a');
+        nameLink.href = 'account-detail.html?id=' + encodeURIComponent(item.account.account_id);
+        nameLink.textContent = item.account.name || '(unnamed)';
+        nameLink.style.color = 'var(--color-info)';
+        nameLink.style.textDecoration = 'none';
+        nameLink.style.fontWeight = '600';
+        tdName.appendChild(nameLink);
+        tr.appendChild(tdName);
+
+        const tdSrc = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'src-badge src-' + primary.source;
+        badge.textContent = primary.source === 'xero' ? 'Xero' : 'Contact';
+        tdSrc.appendChild(badge);
+        tr.appendChild(tdSrc);
+
+        const tdUrl = document.createElement('td');
+        const urlSpan = document.createElement('span');
+        urlSpan.className = 'suggested-url';
+        urlSpan.textContent = primary.url;
+        tdUrl.appendChild(urlSpan);
+
+        // Show alternative suggestions inline
+        if (item.suggestions.length > 1) {
+          item.suggestions.slice(1).forEach(alt => {
+            const altEl = document.createElement('span');
+            altEl.className = 'url-alt';
+            altEl.textContent = '↳ ' + alt.url + ' (' + alt.source + ')';
+            tdUrl.appendChild(altEl);
+          });
+        }
+        tr.appendChild(tdUrl);
+
+        const tdEv = document.createElement('td');
+        tdEv.textContent = primary.evidence;
+        tdEv.style.fontSize = '11px';
+        tdEv.style.color = 'var(--color-gray-600)';
+        tr.appendChild(tdEv);
+
+        tbody.appendChild(tr);
+      }
+    }
+
+    (async function() {
+      await initApp();
+      await loadData();
+    })();
+  </script>
+</body>
+</html>
