@@ -95,8 +95,21 @@ function renderAccountsTable(accounts) {
     tr.onclick = () => { window.location.href = 'account-detail.html?id=' + encodeURIComponent(a.account_id); };
 
     const active = isActive(a) ? 'Yes' : 'No';
-    const fields = [a.name, a.type, active, a.phone, a.email, a.city];
-    fields.forEach(val => {
+
+    // Name column with logo
+    const tdName = document.createElement('td');
+    const logoWrap = document.createElement('div');
+    logoWrap.className = 'logo-name-cell';
+    const logoEl = buildCompanyLogoEl(a.website, a.name, 28);
+    logoWrap.appendChild(logoEl);
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = a.name || '';
+    logoWrap.appendChild(nameSpan);
+    tdName.appendChild(logoWrap);
+    tr.appendChild(tdName);
+
+    const rest = [a.type, active, a.phone, a.email, a.city];
+    rest.forEach(val => {
       const td = document.createElement('td');
       td.textContent = val || '';
       tr.appendChild(td);
@@ -129,6 +142,13 @@ async function loadAccountDetail() {
   document.getElementById('page-title').textContent = name;
   document.getElementById('breadcrumb-name').textContent = name;
   document.title = name + ' — GenHub CRM';
+
+  // Company logo next to title
+  const logoContainer = document.getElementById('detail-logo-container');
+  if (logoContainer) {
+    logoContainer.textContent = '';
+    logoContainer.appendChild(buildCompanyLogoEl(_editingAccount.website, name, 48));
+  }
 
   // Populate form
   const fields = ['name', 'type', 'phone', 'email', 'website', 'address_line1', 'address_line2', 'city', 'postcode'];

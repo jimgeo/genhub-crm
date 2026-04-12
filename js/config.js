@@ -2,6 +2,7 @@ const CONFIG = {
   API_KEY: '',
   SPREADSHEET_ID: '',
   WRITE_PROXY_URL: '',
+  LOGO_DEV_TOKEN: '',
 
   SHEETS: {
     ACCOUNTS: 'Accounts',
@@ -31,6 +32,7 @@ const CONFIG = {
           CONFIG.API_KEY = secrets.API_KEY || CONFIG.API_KEY;
           CONFIG.SPREADSHEET_ID = secrets.SPREADSHEET_ID || CONFIG.SPREADSHEET_ID;
           CONFIG.WRITE_PROXY_URL = secrets.WRITE_PROXY_URL || CONFIG.WRITE_PROXY_URL;
+          CONFIG.LOGO_DEV_TOKEN = secrets.LOGO_DEV_TOKEN || CONFIG.LOGO_DEV_TOKEN;
         }
       } catch (e) {
         console.warn('[config] Could not fetch secrets from /api/config — using fallbacks');

@@ -58,6 +58,95 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ─── Company Logo (logo.dev) ───
+
+/**
+ * Extract domain from a website URL string.
+ * Returns null if no valid domain can be extracted.
+ */
+function extractDomain(website) {
+  if (!website) return null;
+  let w = website.trim();
+  if (!w) return null;
+  try {
+    if (!w.startsWith('http')) w = 'https://' + w;
+    return new URL(w).hostname.replace(/^www\./, '');
+  } catch(e) {
+    return null;
+  }
+}
+
+/**
+ * Build a logo.dev image URL for a given domain.
+ */
+function logoDevUrl(domain, size = 48, format = 'png') {
+  if (!domain) return '';
+  return `https://img.logo.dev/${encodeURIComponent(domain)}?token=${CONFIG.LOGO_DEV_TOKEN}&size=${size}&format=${format}`;
+}
+
+/**
+ * Generate an HTML <img> element string for a company logo with fallback initials.
+ * @param {string} website - the account website field
+ * @param {string} name - the account name (used for fallback initials)
+ * @param {object} opts - { size: 48, cssClass: 'company-logo', lazy: true }
+ */
+function companyLogoHtml(website, name, opts = {}) {
+  const size = opts.size || 48;
+  const cssClass = opts.cssClass || 'company-logo';
+  const lazy = opts.lazy !== false;
+  const domain = extractDomain(website);
+  const initials = (name || '?').substring(0, 2).toUpperCase();
+
+  if (!domain) {
+    return `<span class="${cssClass} ${cssClass}--fallback" style="width:${size}px;height:${size}px;">${escapeHtml(initials)}</span>`;
+  }
+
+  const src = logoDevUrl(domain, size, 'png');
+  return `<img src="${src}" alt="${escapeHtml(name)}" class="${cssClass}" width="${size}" height="${size}" ${lazy ? 'loading="lazy"' : ''} onerror="this.outerHTML='<span class=\\'${cssClass} ${cssClass}--fallback\\' style=\\'width:${size}px;height:${size}px;\\'>${escapeHtml(initials)}</span>'">`;
+}
+
+/**
+ * Build a company logo as a DOM element (safer than HTML string).
+ * @param {string} website
+ * @param {string} name
+ * @param {number} size
+ * @returns {HTMLElement} an <img> or fallback <span>
+ */
+function buildCompanyLogoEl(website, name, size = 48) {
+  const domain = extractDomain(website);
+  const initials = (name || '?').substring(0, 2).toUpperCase();
+  const cssClass = 'company-logo' + (size <= 32 ? ' company-logo--sm' : '');
+
+  const makeFallback = () => {
+    const span = document.createElement('span');
+    span.className = cssClass + ' company-logo--fallback';
+    span.style.width = size + 'px';
+    span.style.height = size + 'px';
+    span.textContent = initials;
+    return span;
+  };
+
+  if (!domain) return makeFallback();
+
+  const img = document.createElement('img');
+  img.src = logoDevUrl(domain, size, 'png');
+  img.alt = name || '';
+  img.className = cssClass;
+  img.width = size;
+  img.height = size;
+  img.loading = 'lazy';
+  img.addEventListener('error', () => {
+    const fallback = makeFallback();
+    img.replaceWith(fallback);
+  });
+  return img;
+}
+
+// ─── Logo Cache Service Worker ───
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw-logo-cache.js').catch(() => {});
+}
+
 // ─── Sortable Table Headers ───
 // Call once after the table is in the DOM.
 // columns: array of { key, label } or just strings (key used as label).

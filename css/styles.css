@@ -759,3 +759,50 @@ tbody tr:last-child td {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ───────── Company Logo ───────── */
+.company-logo {
+  border-radius: 6px;
+  object-fit: contain;
+  background: var(--color-gray-100);
+  flex-shrink: 0;
+}
+
+.company-logo--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--color-gray-100);
+  color: var(--color-gray-500);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.company-logo--sm {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+}
+
+.company-logo--sm.company-logo--fallback {
+  font-size: 11px;
+}
+
+.logo-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.detail-logo {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.detail-logo .company-logo {
+  border: 1px solid var(--color-gray-200);
+}
