@@ -331,6 +331,16 @@
         if (!f.crm) {
           crm.classList.add('empty');
           crm.textContent = '—';
+        } else if (f.label === 'Website') {
+          const wrap = document.createElement('div');
+          wrap.style.display = 'flex';
+          wrap.style.alignItems = 'center';
+          wrap.style.gap = '8px';
+          wrap.appendChild(buildCompanyLogoEl(f.crm, acct.name, 20));
+          const txt = document.createElement('span');
+          txt.textContent = f.crm;
+          wrap.appendChild(txt);
+          crm.appendChild(wrap);
         } else {
           crm.textContent = f.crm;
         }
@@ -342,7 +352,19 @@
           xero.classList.add('empty');
           xero.textContent = '—';
         } else {
-          xero.textContent = f.xero;
+          if (f.label === 'Website') {
+            const wrap = document.createElement('div');
+            wrap.style.display = 'flex';
+            wrap.style.alignItems = 'center';
+            wrap.style.gap = '8px';
+            wrap.appendChild(buildCompanyLogoEl(f.xero, acct.name, 20));
+            const txt = document.createElement('span');
+            txt.textContent = f.xero;
+            wrap.appendChild(txt);
+            xero.appendChild(wrap);
+          } else {
+            xero.textContent = f.xero;
+          }
           if (f.crm && f.xero) {
             const crmNorm = (f.crm || '').toLowerCase().replace(/\s+/g, ' ').trim();
             const xeroNorm = (f.xero || '').toLowerCase().replace(/\s+/g, ' ').trim();

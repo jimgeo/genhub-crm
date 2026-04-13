@@ -300,18 +300,34 @@
         tr.appendChild(tdSrc);
 
         const tdUrl = document.createElement('td');
+        const primaryWrap = document.createElement('div');
+        primaryWrap.style.display = 'flex';
+        primaryWrap.style.alignItems = 'center';
+        primaryWrap.style.gap = '8px';
+        const primaryLogo = buildCompanyLogoEl(primary.url, item.account.name, 24);
+        primaryWrap.appendChild(primaryLogo);
         const urlSpan = document.createElement('span');
         urlSpan.className = 'suggested-url';
         urlSpan.textContent = primary.url;
-        tdUrl.appendChild(urlSpan);
+        primaryWrap.appendChild(urlSpan);
+        tdUrl.appendChild(primaryWrap);
 
         // Show alternative suggestions inline
         if (item.suggestions.length > 1) {
           item.suggestions.slice(1).forEach(alt => {
+            const altWrap = document.createElement('div');
+            altWrap.style.display = 'flex';
+            altWrap.style.alignItems = 'center';
+            altWrap.style.gap = '6px';
+            altWrap.style.marginTop = '4px';
+            const altLogo = buildCompanyLogoEl(alt.url, item.account.name, 18);
+            altWrap.appendChild(altLogo);
             const altEl = document.createElement('span');
             altEl.className = 'url-alt';
-            altEl.textContent = '↳ ' + alt.url + ' (' + alt.source + ')';
-            tdUrl.appendChild(altEl);
+            altEl.style.display = 'inline';
+            altEl.textContent = alt.url + ' (' + alt.source + ')';
+            altWrap.appendChild(altEl);
+            tdUrl.appendChild(altWrap);
           });
         }
         tr.appendChild(tdUrl);
