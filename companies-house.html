@@ -83,6 +83,9 @@
     }
 
     .ch-section { margin-bottom: 0; }
+    .ch-section.section-crm { border-top: 4px solid var(--color-crm); }
+    .ch-section.section-xero { border-top: 4px solid var(--color-xero); }
+    .ch-section.section-ch { border-top: 4px solid var(--color-ch); }
     .ch-section-title {
       font-family: var(--font-ui);
       font-size: 10px;
@@ -154,7 +157,7 @@
       <div class="breadcrumbs"><a href="admin.html">Admin</a> / <span>Companies House</span></div>
       <div class="page-header">
         <div>
-          <h1 class="page-title">Companies House Lookup</h1>
+          <h1 class="page-title" style="color:var(--color-ch);">Companies House Lookup</h1>
           <p style="font-size:13px;color:var(--color-gray-500);">Look up company profile, registered address, and officers from Companies House. Read-only.</p>
         </div>
       </div>
@@ -275,10 +278,11 @@
 
     function buildCrmSummary(account) {
       var panel = document.createElement('div');
-      panel.className = 'ch-panel ch-section';
+      panel.className = 'ch-panel ch-section section-crm';
 
       var title = document.createElement('div');
       title.className = 'ch-section-title';
+      title.style.color = 'var(--color-crm)';
       title.style.display = 'flex';
       title.style.justifyContent = 'space-between';
       title.style.alignItems = 'center';
@@ -362,12 +366,13 @@
       if (!xc) return null;
 
       var panel = document.createElement('div');
-      panel.className = 'ch-panel ch-section';
+      panel.className = 'ch-panel ch-section section-xero';
 
       var title = document.createElement('div');
       title.className = 'ch-section-title';
       title.style.display = 'flex';
       title.style.alignItems = 'center';
+      title.style.color = 'var(--color-xero)';
       title.style.gap = '8px';
       title.appendChild(document.createTextNode('Xero Data: ' + xc.name));
 
@@ -649,10 +654,11 @@
         // ─── Profile Section ───
         if (profile) {
           var profPanel = document.createElement('div');
-          profPanel.className = 'ch-panel ch-section';
+          profPanel.className = 'ch-panel ch-section section-ch';
 
           var profTitle = document.createElement('div');
           profTitle.className = 'ch-section-title';
+          profTitle.style.color = 'var(--color-ch)';
           profTitle.textContent = 'Company Profile';
           profPanel.appendChild(profTitle);
 
@@ -706,10 +712,11 @@
         // ─── Address Section ───
         if (address) {
           var addrPanel = document.createElement('div');
-          addrPanel.className = 'ch-panel ch-section';
+          addrPanel.className = 'ch-panel ch-section section-ch';
 
           var addrTitle = document.createElement('div');
           addrTitle.className = 'ch-section-title';
+          addrTitle.style.color = 'var(--color-ch)';
           addrTitle.textContent = 'Registered Office Address';
           addrPanel.appendChild(addrTitle);
 
@@ -749,7 +756,7 @@
         // ─── Officers Section ───
         if (officers.length > 0) {
           var offPanel = document.createElement('div');
-          offPanel.className = 'ch-panel ch-section';
+          offPanel.className = 'ch-panel ch-section section-ch';
 
           var offTitle = document.createElement('div');
           offTitle.className = 'ch-section-title';

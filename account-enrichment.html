@@ -274,11 +274,15 @@
 
       const h2 = document.createElement('div');
       h2.className = 'col-header';
+      h2.style.borderTop = '4px solid var(--color-crm)';
+      h2.style.color = 'var(--color-crm)';
       h2.textContent = 'GenHub CRM';
       grid.appendChild(h2);
 
       const h3 = document.createElement('div');
       h3.className = 'col-header';
+      h3.style.borderTop = '4px solid var(--color-xero)';
+      h3.style.color = 'var(--color-xero)';
       h3.appendChild(document.createTextNode('Xero'));
       if (!xc) {
         const badge = document.createElement('span');

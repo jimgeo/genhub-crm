@@ -19,8 +19,8 @@
   --color-body-text: #2b2b2b;
   --color-light-text: #a2a2a2;
   --color-border: #919191;
-  --color-bg-warm: #faf8f7;
-  --color-bg-warm-alt: #f5f2f0;
+  --color-bg-warm: #faf6f0;
+  --color-bg-warm-alt: #f5f0e8;
 
   /* CRM Accent Colours */
   --color-primary: #2b2b2b;
@@ -30,6 +30,12 @@
   --color-warning: #f59e0b;
   --color-info: #3b82f6;
 
+  /* Source Accent Colours */
+  --color-crm: #cc2929;
+  --color-xero: #2e7ab5;
+  --color-ch: #d3a227;
+  --color-billing: #3a7d44;
+
   /* CRM Layout */
   --sidebar-width: 220px;
   --sidebar-collapsed: 56px;
@@ -38,8 +44,8 @@
 
   /* Surfaces */
   --color-surface: #ffffff;
-  --color-surface-alt: #faf8f7;
-  --color-gray-100: #f5f2f0;
+  --color-surface-alt: #faf6f0;
+  --color-gray-100: #f5f0e8;
   --color-gray-200: #e5e2df;
   --color-gray-300: #d4d1ce;
   --color-gray-400: #a2a2a2;
@@ -242,8 +248,8 @@ h4 { font-size: 16px; }
 }
 
 .nav-link.active {
-  color: var(--color-black);
-  background: var(--color-gray-100);
+  color: var(--color-crm);
+  background: rgba(204, 41, 41, 0.1);
   font-weight: 600;
 }
 
@@ -379,14 +385,14 @@ h4 { font-size: 16px; }
 }
 
 .btn-primary {
-  background: var(--color-black);
+  background: var(--color-crm);
   color: var(--color-white);
-  border-color: var(--color-black);
+  border-color: var(--color-crm);
 }
 
 .btn-primary:hover {
-  background: var(--color-gray-700);
-  border-color: var(--color-gray-700);
+  background: #a82222;
+  border-color: #a82222;
 }
 
 .btn-danger {
@@ -806,3 +812,64 @@ tbody tr:last-child td {
 .detail-logo .company-logo {
   border: 1px solid var(--color-gray-200);
 }
+
+/* ───────── Source-specific Section Theming ───────── */
+
+/* Section header — generic pattern */
+.source-header {
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.source-header-title {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 700;
+  flex: 1;
+}
+.source-header-sub {
+  font-family: var(--font-body);
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* CRM sections */
+.source-crm { background: rgba(204, 41, 41, 0.1); border-top: 4px solid var(--color-crm); }
+.source-crm .source-header-title { color: #a82222; }
+.badge-crm { background: rgba(204, 41, 41, 0.12); color: var(--color-crm); }
+
+/* Xero sections */
+.source-xero { background: rgba(46, 122, 181, 0.1); border-top: 4px solid var(--color-xero); }
+.source-xero .source-header-title { color: #1e5a8a; }
+.badge-xero { background: rgba(46, 122, 181, 0.12); color: var(--color-xero); }
+
+/* Companies House sections */
+.source-ch { background: rgba(211, 162, 39, 0.1); border-top: 4px solid var(--color-ch); }
+.source-ch .source-header-title { color: #a07a1a; }
+.badge-ch { background: rgba(211, 162, 39, 0.12); color: #a07a1a; }
+
+/* Billing sections */
+.source-billing { background: rgba(58, 125, 68, 0.1); border-top: 4px solid var(--color-billing); }
+.source-billing .source-header-title { color: #2d6335; }
+.badge-billing { background: rgba(58, 125, 68, 0.12); color: var(--color-billing); }
+
+/* Source badge — small inline label */
+.source-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Source-coloured buttons */
+.btn-xero { background: var(--color-xero); color: #fff; border-color: var(--color-xero); }
+.btn-xero:hover { background: #1e5a8a; border-color: #1e5a8a; color: #fff; }
+.btn-ch { background: var(--color-ch); color: #fff; border-color: var(--color-ch); }
+.btn-ch:hover { background: #a07a1a; border-color: #a07a1a; color: #fff; }
+.btn-billing { background: var(--color-billing); color: #fff; border-color: var(--color-billing); }
+.btn-billing:hover { background: #2d6335; border-color: #2d6335; color: #fff; }
