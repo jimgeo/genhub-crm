@@ -209,6 +209,15 @@
         </div>
       </div>
 
+      <!-- Companies House -->
+      <div class="linked-section" id="ch-section" style="display:none;margin-top:32px;">
+        <div class="linked-header">
+          <h3 class="card-title">Companies House</h3>
+          <span id="ch-status" style="font-size:11px;color:var(--color-gray-400);"></span>
+        </div>
+        <div id="ch-content" style="padding:8px 0;"></div>
+      </div>
+
       <!-- Xero Invoices -->
       <div class="linked-section" id="xero-invoices-section" style="display:none;margin-top:32px;">
         <div class="linked-header">
@@ -384,6 +393,87 @@
       return Number(val).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
     }
 
+    /* ---- Companies House ---- */
+    async function loadCompaniesHouse() {
+      if (!_editingAccount || !_editingAccount.company_number) return;
+
+      const section = document.getElementById('ch-section');
+      const statusEl = document.getElementById('ch-status');
+      const content = document.getElementById('ch-content');
+
+      section.style.display = '';
+      statusEl.textContent = 'Loading...';
+
+      try {
+        const resp = await fetch('/api/companies-house/company?number=' + encodeURIComponent(_editingAccount.company_number));
+        const data = await resp.json();
+
+        if (data.error) {
+          statusEl.textContent = data.error;
+          return;
+        }
+
+        statusEl.textContent = _editingAccount.company_number;
+        content.textContent = '';
+
+        const profile = data.profile;
+        const address = data.address;
+        const officers = data.officers || [];
+
+        // Profile fields
+        if (profile) {
+          const grid = document.createElement('div');
+          grid.style.cssText = 'display:grid;grid-template-columns:120px 1fr 120px 1fr;gap:0;font-size:11px;margin-bottom:12px;';
+
+          const fields = [
+            { label: 'Status', value: profile.status },
+            { label: 'Type', value: profile.type },
+            { label: 'Incorporated', value: profile.dateOfCreation },
+            { label: 'SIC Codes', value: (profile.sicCodes || []).join(', ') },
+            { label: 'Accounts Due', value: profile.lastAccounts ? profile.lastAccounts.nextDue : '' },
+            { label: 'Conf. Statement', value: profile.confirmationStatement ? profile.confirmationStatement.nextDue : '' }
+          ];
+
+          fields.forEach(function(f) {
+            const lbl = document.createElement('div');
+            lbl.style.cssText = 'padding:4px 8px;font-family:var(--font-ui);font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--color-gray-400);background:var(--color-gray-50);border-bottom:1px solid var(--color-gray-100);';
+            lbl.textContent = f.label;
+            grid.appendChild(lbl);
+
+            const val = document.createElement('div');
+            val.style.cssText = 'padding:4px 8px;border-bottom:1px solid var(--color-gray-100);';
+            val.textContent = f.value || '—';
+            if (!f.value) val.style.color = 'var(--color-gray-300)';
+            grid.appendChild(val);
+          });
+
+          content.appendChild(grid);
+        }
+
+        // Address
+        if (address) {
+          const addrLine = [address.line1, address.line2, address.locality, address.region, address.postalCode, address.country].filter(Boolean).join(', ');
+          const addrEl = document.createElement('div');
+          addrEl.style.cssText = 'font-size:11px;color:var(--color-gray-600);margin-bottom:12px;';
+          addrEl.textContent = 'Registered Address: ' + addrLine;
+          content.appendChild(addrEl);
+        }
+
+        // Active officers
+        const active = officers.filter(function(o) { return !o.resignedOn; });
+        if (active.length > 0) {
+          const offEl = document.createElement('div');
+          offEl.style.cssText = 'font-size:11px;color:var(--color-gray-600);';
+          offEl.textContent = 'Officers: ' + active.map(function(o) { return o.name + ' (' + o.role + ')'; }).join(', ');
+          content.appendChild(offEl);
+        }
+
+      } catch (err) {
+        statusEl.textContent = 'Unavailable';
+        console.log('Companies House not available:', err.message);
+      }
+    }
+
     (async () => {
       await initApp();
       await loadAccountDetail();
@@ -394,6 +484,9 @@
       if (nameEl && nameEl.value) {
         loadXeroInvoices(nameEl.value);
       }
+
+      // Load Companies House if linked
+      loadCompaniesHouse();
     })();
   </script>
 </body>

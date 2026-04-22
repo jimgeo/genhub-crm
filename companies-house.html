@@ -188,6 +188,8 @@
   <script>
     var allAccounts = [];
     var currentAccountId = null;
+    var currentAccount = null;
+    var currentCompanyNumber = null;
 
     async function loadAccounts() {
       var raw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
@@ -223,14 +225,118 @@
         name.style.textOverflow = 'ellipsis';
         item.appendChild(name);
 
+        if (a.company_number) {
+          var linked = document.createElement('span');
+          linked.textContent = '●';
+          linked.style.color = '#15803d';
+          linked.style.fontSize = '10px';
+          linked.title = 'Linked: ' + a.company_number;
+          item.appendChild(linked);
+        }
+
         item.addEventListener('click', function() {
           currentAccountId = a.account_id;
+          currentAccount = a;
           renderAccountList(document.getElementById('acct-search').value);
-          searchCompaniesHouse(a);
+          if (a.company_number) {
+            // Already linked — go straight to detail
+            showLinkedCompany(a);
+          } else {
+            searchCompaniesHouse(a);
+          }
         });
 
         list.appendChild(item);
       });
+    }
+
+    async function showLinkedCompany(account) {
+      var area = document.getElementById('detail-area');
+      area.textContent = '';
+
+      // Linked info bar
+      var infoPanel = document.createElement('div');
+      infoPanel.className = 'ch-panel';
+      var infoHeader = document.createElement('div');
+      infoHeader.className = 'ch-panel-header';
+      infoHeader.style.display = 'flex';
+      infoHeader.style.justifyContent = 'space-between';
+      infoHeader.style.alignItems = 'center';
+      var infoText = document.createElement('span');
+      infoText.textContent = 'Linked to Companies House: ' + account.company_number;
+      infoHeader.appendChild(infoText);
+
+      var unlinkBtn = document.createElement('button');
+      unlinkBtn.className = 'btn btn-sm';
+      unlinkBtn.textContent = 'Unlink';
+      unlinkBtn.style.fontSize = '10px';
+      unlinkBtn.addEventListener('click', async function() {
+        await unlinkCompany(account);
+      });
+      infoHeader.appendChild(unlinkBtn);
+
+      var searchBtn = document.createElement('button');
+      searchBtn.className = 'btn btn-sm';
+      searchBtn.textContent = 'Search again';
+      searchBtn.style.fontSize = '10px';
+      searchBtn.style.marginLeft = '6px';
+      searchBtn.addEventListener('click', function() {
+        searchCompaniesHouse(account);
+      });
+      infoHeader.appendChild(searchBtn);
+
+      infoPanel.appendChild(infoHeader);
+      area.appendChild(infoPanel);
+
+      var detailPanel = document.createElement('div');
+      detailPanel.id = 'ch-company-detail';
+      area.appendChild(detailPanel);
+
+      loadCompanyDetail(account.company_number);
+    }
+
+    async function linkCompany(account, companyNumber, profile, address) {
+      var idx = allAccounts.findIndex(function(a) { return a.account_id === account.account_id; });
+      if (idx < 0) return;
+
+      var allRaw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
+      var sheetIdx = allRaw.findIndex(function(a) { return a.account_id === account.account_id; });
+      if (sheetIdx < 0) return;
+
+      var updated = Object.assign({}, allRaw[sheetIdx]);
+      updated.company_number = companyNumber;
+      if (profile && profile.name) updated.modified_at = nowISO();
+      if (address) {
+        var addrParts = [address.line1, address.line2, address.locality, address.region].filter(Boolean);
+        updated.registered_address = addrParts.join(', ') + (address.postalCode ? ' ' + address.postalCode : '');
+      }
+
+      await SheetsAPI.update(CONFIG.SHEETS.ACCOUNTS, sheetIdx, updated);
+
+      // Update local cache
+      account.company_number = companyNumber;
+      if (updated.registered_address) account.registered_address = updated.registered_address;
+
+      showToast('Linked to ' + companyNumber);
+      renderAccountList(document.getElementById('acct-search').value);
+      showLinkedCompany(account);
+    }
+
+    async function unlinkCompany(account) {
+      var allRaw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
+      var sheetIdx = allRaw.findIndex(function(a) { return a.account_id === account.account_id; });
+      if (sheetIdx < 0) return;
+
+      var updated = Object.assign({}, allRaw[sheetIdx]);
+      updated.company_number = '';
+      updated.modified_at = nowISO();
+
+      await SheetsAPI.update(CONFIG.SHEETS.ACCOUNTS, sheetIdx, updated);
+
+      account.company_number = '';
+      showToast('Unlinked from Companies House');
+      renderAccountList(document.getElementById('acct-search').value);
+      searchCompaniesHouse(account);
     }
 
     async function searchCompaniesHouse(account) {
@@ -296,12 +402,25 @@
           meta.textContent = parts.join(' · ');
           item.appendChild(meta);
 
+          var linkBtn = document.createElement('button');
+          linkBtn.className = 'btn btn-sm';
+          linkBtn.textContent = 'Link';
+          linkBtn.style.cssText = 'float:right;font-size:10px;margin-top:-2px;';
+          linkBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Fetch full detail then link
+            fetch('/api/companies-house/company?number=' + encodeURIComponent(co.companyNumber))
+              .then(function(r) { return r.json(); })
+              .then(function(d) { linkCompany(account, co.companyNumber, d.profile, d.address); });
+          });
+          nameEl.appendChild(linkBtn);
+
           item.addEventListener('click', function() {
-            // Highlight selected
             searchBody.querySelectorAll('.ch-search-item').forEach(function(el) {
               el.style.background = '';
             });
             item.style.background = '#dbeafe';
+            currentCompanyNumber = co.companyNumber;
             loadCompanyDetail(co.companyNumber);
           });
 
