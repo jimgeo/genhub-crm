@@ -187,14 +187,37 @@
   <script src="js/layout.js"></script>
   <script>
     var allAccounts = [];
+    var xeroContacts = [];
+    var xeroByName = {};
+    var xeroConnected = false;
     var currentAccountId = null;
     var currentAccount = null;
     var currentCompanyNumber = null;
 
     async function loadAccounts() {
-      var raw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
-      allAccounts = raw.filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      var promises = [SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS)];
+
+      try {
+        var statusResp = await fetch('/api/xero/status');
+        var statusData = await statusResp.json();
+        xeroConnected = statusData.connected;
+      } catch (e) {}
+
+      if (xeroConnected) {
+        promises.push(fetch('/api/xero/contacts').then(function(r) { return r.json(); }).catch(function() { return { contacts: [] }; }));
+      }
+
+      var results = await Promise.all(promises);
+      allAccounts = results[0].filter(function(a) { return a.is_deleted !== 'TRUE'; });
       allAccounts.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+
+      if (xeroConnected && results[1]) {
+        xeroContacts = results[1].contacts || [];
+        xeroContacts.forEach(function(xc) {
+          xeroByName[(xc.name || '').toLowerCase().trim()] = xc;
+        });
+      }
+
       renderAccountList('');
 
       document.getElementById('acct-search').addEventListener('input', function() {
@@ -307,12 +330,107 @@
       return panel;
     }
 
+    function buildXeroSummary(account) {
+      if (!xeroConnected) return null;
+
+      var acctLower = (account.name || '').toLowerCase().trim();
+      var xc = xeroByName[acctLower];
+
+      // If no exact match, try close match
+      var matchType = 'none';
+      if (xc) {
+        matchType = 'exact';
+      } else {
+        var bestScore = 0;
+        var bestMatch = null;
+        for (var key in xeroByName) {
+          var candidate = xeroByName[key];
+          if (acctLower.includes(key) || key.includes(acctLower)) {
+            var score = Math.min(acctLower.length, key.length) / Math.max(acctLower.length, key.length);
+            if (score > bestScore && score > 0.5) {
+              bestScore = score;
+              bestMatch = candidate;
+            }
+          }
+        }
+        if (bestMatch) {
+          xc = bestMatch;
+          matchType = 'close';
+        }
+      }
+
+      if (!xc) return null;
+
+      var panel = document.createElement('div');
+      panel.className = 'ch-panel ch-section';
+
+      var title = document.createElement('div');
+      title.className = 'ch-section-title';
+      title.style.display = 'flex';
+      title.style.alignItems = 'center';
+      title.style.gap = '8px';
+      title.appendChild(document.createTextNode('Xero Data: ' + xc.name));
+
+      var badge = document.createElement('span');
+      badge.style.cssText = 'font-size:9px;padding:2px 6px;border-radius:8px;text-transform:none;letter-spacing:0;font-weight:600;';
+      if (matchType === 'exact') {
+        badge.style.background = '#dcfce7';
+        badge.style.color = '#15803d';
+        badge.textContent = 'Exact match';
+      } else {
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+        badge.textContent = 'Close match';
+      }
+      title.appendChild(badge);
+      panel.appendChild(title);
+
+      var grid = document.createElement('div');
+      grid.className = 'ch-field-grid';
+
+      var xAddr = xc.address || {};
+      var xeroAddress = [xAddr.line1, xAddr.line2, xAddr.city, xAddr.region, xAddr.postalCode, xAddr.country].filter(Boolean).join(', ');
+
+      var fields = [
+        { label: 'Email', value: xc.email },
+        { label: 'Website', value: xc.website },
+        { label: 'Phone', value: xc.phoneDefault || xc.phoneDDI || xc.phoneMobile },
+        { label: 'Address', value: xeroAddress },
+        { label: 'VAT Number', value: xc.taxNumber },
+        { label: 'Co. Number', value: xc.companyNumber },
+        { label: 'Account No.', value: xc.accountNumber },
+        { label: 'Type', value: ((xc.isCustomer ? 'Customer ' : '') + (xc.isSupplier ? 'Supplier' : '')).trim() }
+      ];
+
+      fields.forEach(function(f) {
+        var lbl = document.createElement('div');
+        lbl.className = 'ch-field-label';
+        lbl.textContent = f.label;
+        grid.appendChild(lbl);
+
+        var val = document.createElement('div');
+        val.className = 'ch-field-value';
+        if (!f.value) {
+          val.classList.add('empty');
+          val.textContent = '—';
+        } else {
+          val.textContent = f.value;
+        }
+        grid.appendChild(val);
+      });
+
+      panel.appendChild(grid);
+      return panel;
+    }
+
     async function showLinkedCompany(account) {
       var area = document.getElementById('detail-area');
       area.textContent = '';
 
-      // CRM summary
+      // CRM + Xero summary
       area.appendChild(buildCrmSummary(account));
+      var xeroPanel = buildXeroSummary(account);
+      if (xeroPanel) area.appendChild(xeroPanel);
 
       // Linked info bar
       var infoPanel = document.createElement('div');
@@ -403,8 +521,10 @@
       var area = document.getElementById('detail-area');
       area.textContent = '';
 
-      // CRM summary at top
+      // CRM + Xero summary at top
       area.appendChild(buildCrmSummary(account));
+      var xeroPanel = buildXeroSummary(account);
+      if (xeroPanel) area.appendChild(xeroPanel);
 
       // Show search results panel
       var searchPanel = document.createElement('div');
