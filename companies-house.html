@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Companies House — GenHub CRM</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .ch-layout {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+    .ch-panel {
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .ch-panel-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--color-gray-200);
+      background: var(--color-gray-100);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-gray-500);
+    }
+    .ch-account-list {
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    .ch-account-item {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--color-gray-100);
+      cursor: pointer;
+      font-family: var(--font-body);
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ch-account-item:hover { background: var(--color-gray-100); }
+    .ch-account-item.active { background: #dbeafe; font-weight: 600; }
+    .ch-account-search {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .ch-account-search input {
+      width: 100%;
+      padding: 6px 10px;
+      font-size: 12px;
+      border: 1px solid var(--color-gray-200);
+      border-radius: 4px;
+      font-family: var(--font-body);
+    }
+
+    .ch-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .ch-search-results {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .ch-search-item {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--color-gray-100);
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .ch-search-item:hover { background: var(--color-gray-100); }
+    .ch-search-item .ch-co-name { font-weight: 600; }
+    .ch-search-item .ch-co-meta {
+      font-size: 11px;
+      color: var(--color-gray-500);
+      margin-top: 2px;
+    }
+
+    .ch-section { margin-bottom: 0; }
+    .ch-section-title {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-gray-500);
+      padding: 10px 16px;
+      background: var(--color-gray-100);
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .ch-field-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 0;
+    }
+    .ch-field-grid > div {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--color-gray-100);
+      font-size: 12px;
+    }
+    .ch-field-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--color-gray-400);
+      background: var(--color-gray-50);
+    }
+    .ch-field-value {
+      font-family: var(--font-body);
+      word-break: break-word;
+    }
+    .ch-field-value.empty { color: var(--color-gray-300); font-style: italic; }
+
+    .ch-officers-table { width: 100%; font-size: 12px; border-collapse: collapse; }
+    .ch-officers-table th {
+      font-family: var(--font-ui); font-size: 9px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px; color: var(--color-gray-500);
+      background: var(--color-gray-50); padding: 6px 16px; text-align: left;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .ch-officers-table td { padding: 8px 16px; border-bottom: 1px solid var(--color-gray-100); }
+    .ch-officers-table tr.resigned { opacity: 0.4; }
+
+    .ch-status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      font-family: var(--font-ui);
+    }
+    .ch-status-active { background: #dcfce7; color: #15803d; }
+    .ch-status-dissolved { background: #fee2e2; color: #991b1b; }
+    .ch-status-other { background: var(--color-gray-100); color: var(--color-gray-500); }
+
+    @media (max-width: 900px) {
+      .ch-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header" id="app-header"></header>
+  <div class="app-layout">
+    <nav class="app-sidebar" id="app-sidebar"></nav>
+    <main class="app-main">
+      <div class="breadcrumbs"><a href="admin.html">Admin</a> / <span>Companies House</span></div>
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Companies House Lookup</h1>
+          <p style="font-size:13px;color:var(--color-gray-500);">Look up company profile, registered address, and officers from Companies House. Read-only.</p>
+        </div>
+      </div>
+
+      <div class="ch-layout">
+        <!-- Account list -->
+        <div class="ch-panel">
+          <div class="ch-panel-header">CRM Accounts</div>
+          <div class="ch-account-search">
+            <input type="text" id="acct-search" placeholder="Search accounts...">
+          </div>
+          <div class="ch-account-list" id="acct-list"></div>
+        </div>
+
+        <!-- Detail area -->
+        <div class="ch-detail" id="detail-area">
+          <div class="ch-panel">
+            <div style="padding:20px;color:var(--color-gray-400);text-align:center;font-family:var(--font-ui);font-size:13px;">
+              Select an account to look up on Companies House
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/sheets-api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
+  <script>
+    var allAccounts = [];
+    var currentAccountId = null;
+
+    async function loadAccounts() {
+      var raw = await SheetsAPI.getAll(CONFIG.SHEETS.ACCOUNTS);
+      allAccounts = raw.filter(function(a) { return a.is_deleted !== 'TRUE'; });
+      allAccounts.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+      renderAccountList('');
+
+      document.getElementById('acct-search').addEventListener('input', function() {
+        renderAccountList(this.value);
+      });
+    }
+
+    function renderAccountList(query) {
+      var list = document.getElementById('acct-list');
+      list.textContent = '';
+      var q = (query || '').toLowerCase().trim();
+
+      var filtered = allAccounts.filter(function(a) {
+        return !q || (a.name || '').toLowerCase().includes(q);
+      });
+
+      filtered.forEach(function(a) {
+        var item = document.createElement('div');
+        item.className = 'ch-account-item' + (a.account_id === currentAccountId ? ' active' : '');
+
+        var logo = buildCompanyLogoEl(a.website, a.name, 20);
+        item.appendChild(logo);
+
+        var name = document.createElement('span');
+        name.textContent = a.name || '(unnamed)';
+        name.style.flex = '1';
+        name.style.overflow = 'hidden';
+        name.style.textOverflow = 'ellipsis';
+        item.appendChild(name);
+
+        item.addEventListener('click', function() {
+          currentAccountId = a.account_id;
+          renderAccountList(document.getElementById('acct-search').value);
+          searchCompaniesHouse(a);
+        });
+
+        list.appendChild(item);
+      });
+    }
+
+    async function searchCompaniesHouse(account) {
+      var area = document.getElementById('detail-area');
+      area.textContent = '';
+
+      // Show search results panel
+      var searchPanel = document.createElement('div');
+      searchPanel.className = 'ch-panel';
+
+      var searchHeader = document.createElement('div');
+      searchHeader.className = 'ch-panel-header';
+      searchHeader.textContent = 'Companies House Search: "' + (account.name || '') + '"';
+      searchPanel.appendChild(searchHeader);
+
+      var searchBody = document.createElement('div');
+      searchBody.className = 'ch-search-results';
+      searchBody.textContent = 'Searching...';
+      searchBody.style.padding = '16px';
+      searchBody.style.color = 'var(--color-gray-400)';
+      searchPanel.appendChild(searchBody);
+      area.appendChild(searchPanel);
+
+      // Detail panel (populated after selection)
+      var detailPanel = document.createElement('div');
+      detailPanel.id = 'ch-company-detail';
+      area.appendChild(detailPanel);
+
+      try {
+        var resp = await fetch('/api/companies-house/search?q=' + encodeURIComponent(account.name));
+        var data = await resp.json();
+
+        if (data.error) {
+          searchBody.textContent = 'Error: ' + data.error;
+          return;
+        }
+
+        var companies = data.companies || [];
+        searchBody.textContent = '';
+        searchBody.style.padding = '0';
+
+        if (companies.length === 0) {
+          searchBody.style.padding = '16px';
+          searchBody.textContent = 'No companies found matching "' + account.name + '"';
+          return;
+        }
+
+        companies.forEach(function(co) {
+          var item = document.createElement('div');
+          item.className = 'ch-search-item';
+
+          var nameEl = document.createElement('div');
+          nameEl.className = 'ch-co-name';
+          nameEl.textContent = co.name;
+          item.appendChild(nameEl);
+
+          var meta = document.createElement('div');
+          meta.className = 'ch-co-meta';
+          var parts = [co.companyNumber];
+          if (co.status) parts.push(co.status);
+          if (co.dateOfCreation) parts.push('Inc. ' + co.dateOfCreation);
+          if (co.address) parts.push(co.address);
+          meta.textContent = parts.join(' · ');
+          item.appendChild(meta);
+
+          item.addEventListener('click', function() {
+            // Highlight selected
+            searchBody.querySelectorAll('.ch-search-item').forEach(function(el) {
+              el.style.background = '';
+            });
+            item.style.background = '#dbeafe';
+            loadCompanyDetail(co.companyNumber);
+          });
+
+          searchBody.appendChild(item);
+        });
+
+        // Auto-select first result
+        if (companies.length > 0) {
+          searchBody.querySelector('.ch-search-item').style.background = '#dbeafe';
+          loadCompanyDetail(companies[0].companyNumber);
+        }
+
+      } catch (err) {
+        searchBody.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    async function loadCompanyDetail(companyNumber) {
+      var container = document.getElementById('ch-company-detail');
+      container.textContent = '';
+
+      var loadingPanel = document.createElement('div');
+      loadingPanel.className = 'ch-panel';
+      loadingPanel.style.padding = '16px';
+      loadingPanel.style.color = 'var(--color-gray-400)';
+      loadingPanel.textContent = 'Loading company ' + companyNumber + '...';
+      container.appendChild(loadingPanel);
+
+      try {
+        var resp = await fetch('/api/companies-house/company?number=' + encodeURIComponent(companyNumber));
+        var data = await resp.json();
+
+        if (data.error) {
+          loadingPanel.textContent = 'Error: ' + data.error;
+          return;
+        }
+
+        container.textContent = '';
+        var profile = data.profile;
+        var address = data.address;
+        var officers = data.officers || [];
+
+        // ─── Profile Section ───
+        if (profile) {
+          var profPanel = document.createElement('div');
+          profPanel.className = 'ch-panel ch-section';
+
+          var profTitle = document.createElement('div');
+          profTitle.className = 'ch-section-title';
+          profTitle.textContent = 'Company Profile';
+          profPanel.appendChild(profTitle);
+
+          var profGrid = document.createElement('div');
+          profGrid.className = 'ch-field-grid';
+
+          var statusClass = 'ch-status-other';
+          if (profile.status === 'active') statusClass = 'ch-status-active';
+          else if (profile.status === 'dissolved') statusClass = 'ch-status-dissolved';
+
+          var profFields = [
+            { label: 'Company Name', value: profile.name },
+            { label: 'Company Number', value: profile.companyNumber },
+            { label: 'Status', value: profile.status, badge: statusClass },
+            { label: 'Type', value: profile.type },
+            { label: 'Incorporated', value: profile.dateOfCreation },
+            { label: 'Dissolved', value: profile.dateOfCessation },
+            { label: 'SIC Codes', value: (profile.sicCodes || []).join(', ') },
+            { label: 'Jurisdiction', value: profile.jurisdiction },
+            { label: 'Accounts Due', value: profile.lastAccounts ? profile.lastAccounts.nextDue : '' },
+            { label: 'Last Accounts', value: profile.lastAccounts ? profile.lastAccounts.madeUpTo : '' },
+            { label: 'Conf. Statement', value: profile.confirmationStatement ? profile.confirmationStatement.nextDue : '' }
+          ];
+
+          profFields.forEach(function(f) {
+            var lbl = document.createElement('div');
+            lbl.className = 'ch-field-label';
+            lbl.textContent = f.label;
+            profGrid.appendChild(lbl);
+
+            var val = document.createElement('div');
+            val.className = 'ch-field-value';
+            if (!f.value) {
+              val.classList.add('empty');
+              val.textContent = '—';
+            } else if (f.badge) {
+              var badge = document.createElement('span');
+              badge.className = 'ch-status-badge ' + f.badge;
+              badge.textContent = f.value;
+              val.appendChild(badge);
+            } else {
+              val.textContent = f.value;
+            }
+            profGrid.appendChild(val);
+          });
+
+          profPanel.appendChild(profGrid);
+          container.appendChild(profPanel);
+        }
+
+        // ─── Address Section ───
+        if (address) {
+          var addrPanel = document.createElement('div');
+          addrPanel.className = 'ch-panel ch-section';
+
+          var addrTitle = document.createElement('div');
+          addrTitle.className = 'ch-section-title';
+          addrTitle.textContent = 'Registered Office Address';
+          addrPanel.appendChild(addrTitle);
+
+          var addrGrid = document.createElement('div');
+          addrGrid.className = 'ch-field-grid';
+
+          var addrFields = [
+            { label: 'Address Line 1', value: address.line1 },
+            { label: 'Address Line 2', value: address.line2 },
+            { label: 'Locality', value: address.locality },
+            { label: 'Region', value: address.region },
+            { label: 'Postal Code', value: address.postalCode },
+            { label: 'Country', value: address.country }
+          ];
+
+          addrFields.forEach(function(f) {
+            var lbl = document.createElement('div');
+            lbl.className = 'ch-field-label';
+            lbl.textContent = f.label;
+            addrGrid.appendChild(lbl);
+
+            var val = document.createElement('div');
+            val.className = 'ch-field-value';
+            if (!f.value) {
+              val.classList.add('empty');
+              val.textContent = '—';
+            } else {
+              val.textContent = f.value;
+            }
+            addrGrid.appendChild(val);
+          });
+
+          addrPanel.appendChild(addrGrid);
+          container.appendChild(addrPanel);
+        }
+
+        // ─── Officers Section ───
+        if (officers.length > 0) {
+          var offPanel = document.createElement('div');
+          offPanel.className = 'ch-panel ch-section';
+
+          var offTitle = document.createElement('div');
+          offTitle.className = 'ch-section-title';
+          offTitle.textContent = 'Officers (' + officers.length + ')';
+          offPanel.appendChild(offTitle);
+
+          var table = document.createElement('table');
+          table.className = 'ch-officers-table';
+          var thead = document.createElement('thead');
+          var headRow = document.createElement('tr');
+          ['Name', 'Role', 'Appointed', 'Resigned', 'Nationality', 'Occupation'].forEach(function(h) {
+            var th = document.createElement('th');
+            th.textContent = h;
+            headRow.appendChild(th);
+          });
+          thead.appendChild(headRow);
+          table.appendChild(thead);
+
+          var tbody = document.createElement('tbody');
+          // Active officers first
+          officers.sort(function(a, b) {
+            if (a.resignedOn && !b.resignedOn) return 1;
+            if (!a.resignedOn && b.resignedOn) return -1;
+            return 0;
+          });
+
+          officers.forEach(function(off) {
+            var tr = document.createElement('tr');
+            if (off.resignedOn) tr.className = 'resigned';
+
+            var fields = [off.name, off.role, off.appointedOn, off.resignedOn || '—', off.nationality, off.occupation];
+            fields.forEach(function(v) {
+              var td = document.createElement('td');
+              td.textContent = v || '';
+              tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+          });
+
+          table.appendChild(tbody);
+          offPanel.appendChild(table);
+          container.appendChild(offPanel);
+        }
+
+      } catch (err) {
+        loadingPanel.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    (async function() {
+      await initApp();
+      await loadAccounts();
+    })();
+  </script>
+</body>
+</html>

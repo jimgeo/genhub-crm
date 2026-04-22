@@ -2,5 +2,6 @@ API_KEY=your-google-sheets-api-key
 SPREADSHEET_ID=your-spreadsheet-id
 WRITE_PROXY_URL=your-apps-script-url
 LOGO_DEV_TOKEN=your-logo-dev-token
+COMPANIES_HOUSE_API_KEY=your-companies-house-api-key
 XERO_CLIENT_ID=your-xero-client-id
 XERO_CLIENT_SECRET=your-xero-client-secret
