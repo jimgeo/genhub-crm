@@ -250,9 +250,69 @@
       });
     }
 
+    function buildCrmSummary(account) {
+      var panel = document.createElement('div');
+      panel.className = 'ch-panel ch-section';
+
+      var title = document.createElement('div');
+      title.className = 'ch-section-title';
+      title.style.display = 'flex';
+      title.style.justifyContent = 'space-between';
+      title.style.alignItems = 'center';
+      var titleText = document.createElement('span');
+      titleText.textContent = 'CRM Data: ' + (account.name || '');
+      title.appendChild(titleText);
+
+      var viewLink = document.createElement('a');
+      viewLink.href = 'account-detail.html?id=' + encodeURIComponent(account.account_id);
+      viewLink.textContent = 'View Account';
+      viewLink.style.cssText = 'font-size:10px;text-transform:none;letter-spacing:0;font-weight:500;color:var(--color-info);text-decoration:none;';
+      title.appendChild(viewLink);
+      panel.appendChild(title);
+
+      var grid = document.createElement('div');
+      grid.className = 'ch-field-grid';
+
+      var address = [account.address_line1, account.address_line2, account.city, account.postcode].filter(Boolean).join(', ');
+
+      var fields = [
+        { label: 'Type', value: account.type },
+        { label: 'Website', value: account.website },
+        { label: 'Phone', value: account.phone },
+        { label: 'Email', value: account.email },
+        { label: 'Address', value: address },
+        { label: 'Company No.', value: account.company_number },
+        { label: 'VAT Number', value: account.vat_number },
+        { label: 'Reg. Address', value: account.registered_address }
+      ];
+
+      fields.forEach(function(f) {
+        var lbl = document.createElement('div');
+        lbl.className = 'ch-field-label';
+        lbl.textContent = f.label;
+        grid.appendChild(lbl);
+
+        var val = document.createElement('div');
+        val.className = 'ch-field-value';
+        if (!f.value) {
+          val.classList.add('empty');
+          val.textContent = '—';
+        } else {
+          val.textContent = f.value;
+        }
+        grid.appendChild(val);
+      });
+
+      panel.appendChild(grid);
+      return panel;
+    }
+
     async function showLinkedCompany(account) {
       var area = document.getElementById('detail-area');
       area.textContent = '';
+
+      // CRM summary
+      area.appendChild(buildCrmSummary(account));
 
       // Linked info bar
       var infoPanel = document.createElement('div');
@@ -342,6 +402,9 @@
     async function searchCompaniesHouse(account) {
       var area = document.getElementById('detail-area');
       area.textContent = '';
+
+      // CRM summary at top
+      area.appendChild(buildCrmSummary(account));
 
       // Show search results panel
       var searchPanel = document.createElement('div');
